@@ -1,0 +1,14 @@
+{
+  "name": "@verolas/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Verolas web app. Next.js 15, React 19, TypeScript, Tailwind 4, shadcn.",
+  "scripts": {
+    "build": "echo 'web build placeholder'",
+    "dev": "echo 'web dev placeholder'",
+    "lint": "echo 'web lint placeholder'",
+    "typecheck": "echo 'web typecheck placeholder'",
+    "test": "echo 'web test placeholder'",
+    "clean": "rm -rf .next dist .turbo"
+  }
+}

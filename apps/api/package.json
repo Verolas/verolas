@@ -1,0 +1,14 @@
+{
+  "name": "@verolas/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Verolas API gateway workspace marker. The runtime is Python FastAPI plus Rust hot paths.",
+  "scripts": {
+    "build": "echo 'api build placeholder'",
+    "dev": "echo 'api dev placeholder'",
+    "lint": "echo 'api lint placeholder'",
+    "typecheck": "echo 'api typecheck placeholder'",
+    "test": "echo 'api test placeholder'",
+    "clean": "rm -rf dist .turbo .pytest_cache"
+  }
+}

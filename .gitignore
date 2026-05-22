@@ -1,0 +1,63 @@
+# Private internal docs (never commit)
+verolas-product-bible.md
+CLAUDE.md
+.claude/
+
+# Node
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
+out/
+.next/
+.turbo/
+.cache/
+.parcel-cache/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.python-version
+
+# Rust
+target/
+Cargo.lock
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and coverage
+*.log
+coverage/
+.nyc_output/
+
+# Test artefacts
+playwright-report/
+test-results/
+
+# Local-only state
+.local/
+tmp/
