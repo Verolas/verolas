@@ -18,3 +18,4 @@ Numbered index:
 - ADR 006: Core backend skeleton, FastAPI, structlog, Prometheus, SLA tiering
 - ADR 007: Object storage, presigned uploads, ClamAV scanning, CMK architecture
 - ADR 008: Frontend skeleton, Next.js 15, Tailwind 4, shadcn primitives, axe a11y baseline
+- ADR 009: Project workspace data model, audit log Merkle chain, project CRUD wired end to end

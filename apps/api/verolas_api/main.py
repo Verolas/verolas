@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from prometheus_client import CollectorRegistry
+from psycopg_pool import AsyncConnectionPool
 from verolas_auth import TokenVerifier, TokenVerifierSettings
 from verolas_storage import PresignedUrlService, StorageSettings
 
@@ -31,6 +32,7 @@ def create_app(
     token_verifier: TokenVerifier | None = None,
     metrics_registry: CollectorRegistry | None = None,
     storage_service: PresignedUrlService | None = None,
+    db_pool: AsyncConnectionPool | None = None,
 ) -> FastAPI:
     """Build a new app instance.
 
@@ -59,8 +61,27 @@ def create_app(
         )
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
-        yield
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        # Open the DB pool if a URL is configured and one wasn't injected.
+        owns_pool = False
+        if db_pool is None and actual_settings.database_url:
+            pool = AsyncConnectionPool(
+                conninfo=actual_settings.database_url,
+                min_size=1,
+                max_size=10,
+                open=False,
+            )
+            await pool.open()
+            await pool.wait()
+            app.state.db_pool = pool
+            owns_pool = True
+        elif db_pool is not None:
+            app.state.db_pool = db_pool
+        try:
+            yield
+        finally:
+            if owns_pool:
+                await app.state.db_pool.close()
 
     app = FastAPI(
         title="Verolas API",
@@ -87,6 +108,8 @@ def create_app(
     app.state.token_verifier = token_verifier
     app.state.metrics_registry = registry
     app.state.storage_service = storage_service
+    if db_pool is not None:
+        app.state.db_pool = db_pool
 
     app.add_middleware(
         SlaTierMiddleware,
