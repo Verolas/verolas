@@ -1,0 +1,67 @@
+auth:
+  adminUser: admin
+  existingSecret: keycloak-admin
+  existingSecretPasswordKey: admin-password
+
+replicaCount: 3
+
+proxy: edge
+production: true
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+# Prod points at the shared CloudNativePG cluster, no embedded Postgres.
+postgresql:
+  enabled: false
+
+externalDatabase:
+  host: verolas-pg-rw.postgres.svc.cluster.local
+  port: 5432
+  user: keycloak
+  database: keycloak
+  existingSecret: keycloak-db-external
+  existingSecretPasswordKey: password
+
+extraEnvVars:
+  - name: KC_FEATURES
+    value: "preview,token-exchange,recovery-codes,scripts"
+  - name: KC_HOSTNAME
+    value: "auth.verolas.com"
+  - name: KC_HOSTNAME_STRICT
+    value: "true"
+  - name: KC_HEALTH_ENABLED
+    value: "true"
+  - name: KC_METRICS_ENABLED
+    value: "true"
+  - name: KC_LOG_LEVEL
+    value: "INFO"
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  hostname: auth.verolas.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  tls: true
+  selfSigned: false
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+podAntiAffinityPreset: hard
+
+networkPolicy:
+  enabled: true

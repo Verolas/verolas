@@ -1,0 +1,75 @@
+auth:
+  adminUser: admin
+  existingSecret: keycloak-admin
+  existingSecretPasswordKey: admin-password
+
+replicaCount: 1
+
+proxy: edge
+production: false
+
+httpRelativePath: /
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+persistence:
+  enabled: false
+
+postgresql:
+  enabled: true
+  auth:
+    existingSecret: keycloak-db
+    secretKeys:
+      adminPasswordKey: admin-password
+      userPasswordKey: user-password
+      replicationPasswordKey: replication-password
+  primary:
+    persistence:
+      enabled: true
+      storageClass: hcloud-volumes
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+externalDatabase:
+  host: ""
+  port: 5432
+  user: keycloak
+  database: keycloak
+
+extraEnvVars:
+  - name: KC_FEATURES
+    value: "preview,token-exchange,recovery-codes"
+  - name: KC_HOSTNAME_STRICT
+    value: "false"
+  - name: KC_HOSTNAME_STRICT_HTTPS
+    value: "false"
+  - name: KC_HEALTH_ENABLED
+    value: "true"
+  - name: KC_METRICS_ENABLED
+    value: "true"
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+
+# Realm bootstrap (clients, roles, OTP policy) is applied after install via
+# kcadm. See README.md for the procedure.
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true

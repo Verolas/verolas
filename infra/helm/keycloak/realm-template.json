@@ -1,0 +1,106 @@
+{
+  "realm": "verolas",
+  "enabled": true,
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "rememberMe": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+
+  "passwordPolicy": "length(12) and digits(1) and lowerCase(1) and upperCase(1) and specialChars(1) and notUsername and notEmail and passwordHistory(5) and forceExpiredPasswordChange(90)",
+
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "DENY",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+
+  "roles": {
+    "realm": [
+      { "name": "owner", "description": "Full org access; can manage memberships, billing, settings" },
+      { "name": "admin", "description": "Org management except billing and ownership transfer" },
+      { "name": "reviewer", "description": "Reviews deliverables and signs off" },
+      { "name": "engineer", "description": "Runs workflows, edits projects" },
+      { "name": "viewer", "description": "Read only access to projects and deliverables" },
+      { "name": "auditor", "description": "Read only access to audit logs and compliance data" }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "verolas-web",
+      "name": "Verolas Web",
+      "description": "Frontend SPA that exchanges Keycloak codes for tokens",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["https://app.verolas.com/*"],
+      "webOrigins": ["https://app.verolas.com"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://app.verolas.com/*"
+      }
+    },
+    {
+      "clientId": "verolas-api",
+      "name": "Verolas API",
+      "description": "Backend services that verify access tokens",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true
+    }
+  ],
+
+  "authenticationFlows": [],
+
+  "requiredActions": [
+    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "providerId": "CONFIGURE_TOTP", "enabled": true, "defaultAction": true, "priority": 10, "config": {} },
+    { "alias": "VERIFY_EMAIL", "name": "Verify Email", "providerId": "VERIFY_EMAIL", "enabled": true, "defaultAction": true, "priority": 20, "config": {} }
+  ],
+
+  "smtpServer": {
+    "host": "REPLACE_WITH_SMTP_HOST",
+    "port": "587",
+    "from": "no-reply@verolas.com",
+    "fromDisplayName": "Verolas",
+    "auth": "true",
+    "user": "REPLACE_WITH_SMTP_USER",
+    "password": "REPLACE_WITH_SMTP_PASSWORD",
+    "ssl": "false",
+    "starttls": "true"
+  },
+
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "REGISTER", "REGISTER_ERROR",
+    "UPDATE_PASSWORD", "UPDATE_PASSWORD_ERROR", "UPDATE_TOTP", "UPDATE_TOTP_ERROR",
+    "REMOVE_TOTP", "VERIFY_EMAIL", "VERIFY_EMAIL_ERROR",
+    "GRANT_CONSENT", "GRANT_CONSENT_ERROR",
+    "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}
