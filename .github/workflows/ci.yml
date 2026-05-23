@@ -21,8 +21,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -64,8 +62,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_CONFIG: .gitleaks.toml
-        with:
-          config-path: .gitleaks.toml
+      # gitleaks-action v2 requires a paid license for org repos.
+      # We run the gitleaks binary directly instead, which is free.
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION=8.21.2
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: gitleaks detect
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
