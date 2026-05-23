@@ -37,6 +37,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "a1c0d3e5f7b9"
@@ -71,12 +72,24 @@ def upgrade() -> None:
         sa.Column("plan", sa.Text, nullable=False, server_default=sa.text("'free'")),
         sa.Column(
             "status",
-            sa.Enum("active", "suspended", "deleted", name="organization_status", create_type=False),
+            sa.Enum(
+                "active", "suspended", "deleted", name="organization_status", create_type=False
+            ),
             nullable=False,
             server_default=sa.text("'active'"),
         ),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
 
     user_status = sa.Enum("active", "invited", "suspended", "deleted", name="user_status")
@@ -90,15 +103,27 @@ def upgrade() -> None:
         sa.Column("keycloak_subject", sa.Text, nullable=True, unique=True),
         sa.Column(
             "status",
-            sa.Enum("active", "invited", "suspended", "deleted", name="user_status", create_type=False),
+            sa.Enum(
+                "active", "invited", "suspended", "deleted", name="user_status", create_type=False
+            ),
             nullable=False,
             server_default=sa.text("'invited'"),
         ),
         sa.Column("mfa_enabled", sa.Boolean, nullable=False, server_default=sa.text("false")),
         sa.Column("totp_secret_encrypted", sa.LargeBinary, nullable=True),
         sa.Column("last_login_at", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
 
     role_enum = sa.Enum(
@@ -143,8 +168,18 @@ def upgrade() -> None:
         ),
         sa.Column("invited_at", sa.TIMESTAMP(timezone=True), nullable=True),
         sa.Column("accepted_at", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.UniqueConstraint("user_id", "org_id", name="memberships_user_org_unique"),
     )
 

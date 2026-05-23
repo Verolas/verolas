@@ -8,7 +8,11 @@ useDefault = true
 description = "Paths that intentionally contain example or placeholder credentials"
 paths = [
   '''infra/live/.*/terraform\.tfvars\.example$''',
+  '''infra/k8s/.*\.example$''',
   '''docs/decisions/.*\.md$''',
+  '''.*/tests?/.*\.(py|ts|tsx|rs)$''',
+  '''.*\.test\.(ts|tsx|js)$''',
+  '''.*\.spec\.(ts|tsx|js)$''',
 ]
 regexes = [
   # Placeholder strings used in templates
