@@ -1,0 +1,20 @@
+# Next.js build output
+.next/
+out/
+next-env.d.ts
+
+# Production
+build/
+dist/
+
+# Storybook
+storybook-static/
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
+# Misc
+.DS_Store
+*.tsbuildinfo

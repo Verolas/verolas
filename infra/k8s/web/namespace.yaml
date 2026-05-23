@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: verolas-web
+  labels:
+    project: verolas
+    component: web

@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  /* Verolas brand tokens. Refine once the design system audit lands. */
+  --color-background: oklch(0.99 0.005 240);
+  --color-foreground: oklch(0.18 0.02 240);
+  --color-muted: oklch(0.95 0.01 240);
+  --color-muted-foreground: oklch(0.48 0.02 240);
+  --color-border: oklch(0.9 0.01 240);
+  --color-input: oklch(0.9 0.01 240);
+  --color-ring: oklch(0.55 0.18 250);
+  --color-primary: oklch(0.45 0.18 250);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-secondary: oklch(0.96 0.005 240);
+  --color-secondary-foreground: oklch(0.18 0.02 240);
+  --color-destructive: oklch(0.55 0.22 25);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --color-accent: oklch(0.93 0.04 250);
+  --color-accent-foreground: oklch(0.18 0.02 240);
+
+  --color-verolas-deep: oklch(0.25 0.15 250);
+  --color-verolas-mid: oklch(0.55 0.18 250);
+  --color-verolas-soft: oklch(0.94 0.04 250);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
+  }
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
