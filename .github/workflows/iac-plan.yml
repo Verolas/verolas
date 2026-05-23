@@ -68,11 +68,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check required secrets are configured
+        id: gate
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          HETZNER_S3_ACCESS_KEY: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
+          HETZNER_S3_SECRET_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          missing=()
+          for s in HCLOUD_TOKEN HETZNER_S3_ACCESS_KEY HETZNER_S3_SECRET_KEY CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID SSH_PUBLIC_KEY SSH_PRIVATE_KEY; do
+            if [ -z "${!s}" ]; then
+              missing+=("$s")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::iac-plan is skipping because these required secrets are not configured: ${missing[*]}. See .github/SECRETS.md."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: opentofu/setup-opentofu@v1
+        if: steps.gate.outputs.skip != 'true'
         with:
           tofu_version: 1.12.0
 
       - name: Prepare SSH keys
+        if: steps.gate.outputs.skip != 'true'
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' '${{ secrets.SSH_PUBLIC_KEY }}' > ~/.ssh/verolas_cluster_dev.pub
@@ -81,10 +107,12 @@ jobs:
           chmod 644 ~/.ssh/verolas_cluster_dev.pub
 
       - name: tofu init
+        if: steps.gate.outputs.skip != 'true'
         working-directory: infra/live/${{ matrix.env }}
         run: tofu init -input=false
 
       - name: tofu plan
+        if: steps.gate.outputs.skip != 'true'
         id: plan
         working-directory: infra/live/${{ matrix.env }}
         run: |
@@ -98,6 +126,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Post plan as PR comment
+        if: steps.gate.outputs.skip != 'true'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: tofu-plan-${{ matrix.env }}
