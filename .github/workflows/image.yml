@@ -33,11 +33,13 @@ jobs:
             echo "No Dockerfiles found, image pipeline will skip the build stage."
             exit 0
           fi
+          # Context is always repo root so Dockerfiles can COPY from
+          # adjacent workspaces (e.g. apps/api referencing services/auth).
           include="["
           while IFS= read -r df; do
             dir=$(dirname "$df")
             name=$(basename "$dir")
-            include+="{\"context\":\"$dir\",\"dockerfile\":\"$df\",\"name\":\"$name\"},"
+            include+="{\"context\":\".\",\"dockerfile\":\"$df\",\"name\":\"$name\"},"
           done <<< "$dockerfiles"
           include="${include%,}]"
           echo "has_images=true" >> "$GITHUB_OUTPUT"
