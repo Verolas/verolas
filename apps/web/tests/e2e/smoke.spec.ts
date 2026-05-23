@@ -21,7 +21,7 @@ test("login page renders and is WCAG 2.2 AA clean", async ({ page }) => {
 
 test("dashboard renders for unauthenticated users (skeleton stage)", async ({ page }) => {
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
@@ -31,7 +31,7 @@ test("dashboard renders for unauthenticated users (skeleton stage)", async ({ pa
 
 test("projects renders for unauthenticated users (skeleton stage)", async ({ page }) => {
   await page.goto("/projects");
-  await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Projects" })).toBeVisible();
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
