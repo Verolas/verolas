@@ -23,10 +23,13 @@ module "k8s" {
 
   # Single node topology for early development. Scale up to 3 + 3 when product
   # workloads or a pilot make HA necessary; see infra/live/dev/README.md.
+  # Single node with 8 GB RAM is the smallest shape that fits the dev
+  # platform: Postgres, Redis, Keycloak, ClamAV, the api pod, and the
+  # web pod all alongside the cluster system services.
   control_plane_count               = 1
-  control_plane_server_type         = "cx23"
+  control_plane_server_type         = "cx43"
   worker_count                      = 0
-  worker_server_type                = "cx23"
+  worker_server_type                = "cx43"
   allow_scheduling_on_control_plane = true
 
   ssh_public_key  = file(pathexpand(var.ssh_public_key_path))
