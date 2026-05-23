@@ -1,0 +1,44 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: verolas-web-headers
+  namespace: verolas-web
+spec:
+  headers:
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    referrerPolicy: strict-origin-when-cross-origin
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    contentSecurityPolicy: >
+      default-src 'self';
+      script-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob:;
+      font-src 'self' data:;
+      connect-src 'self' https:;
+      frame-ancestors 'none';
+      base-uri 'self';
+      object-src 'none';
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: verolas-web
+  namespace: verolas-web
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`app.dev.verolas.com`)
+      kind: Rule
+      services:
+        - name: verolas-web
+          port: 80
+      middlewares:
+        - name: verolas-web-headers
+  tls:
+    secretName: verolas-web-tls
