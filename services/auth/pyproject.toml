@@ -1,0 +1,52 @@
+[project]
+name = "verolas-auth"
+version = "0.0.0"
+description = "Verolas auth primitives: OIDC token verification, RBAC, MFA TOTP, tenancy context."
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Verolas" }]
+dependencies = [
+  "cryptography>=43.0.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.9.0",
+  "pyjwt[crypto]>=2.9.0",
+  "pyotp>=2.9.0",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.13.0",
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+  "ruff>=0.7.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verolas_auth"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ANN", "RUF"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
