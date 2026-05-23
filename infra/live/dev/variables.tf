@@ -27,15 +27,16 @@ variable "cloudflare_account_id" {
   type        = string
 }
 
-variable "ssh_public_key" {
-  description = "SSH public key in OpenSSH format. Added to all dev nodes for break glass access."
+variable "ssh_public_key_path" {
+  description = "Path to the SSH public key file in OpenSSH format. Default ~/.ssh/verolas_dev.pub."
   type        = string
+  default     = "~/.ssh/verolas_dev.pub"
 }
 
-variable "ssh_private_key" {
-  description = "SSH private key. Used by kube-hetzner during bootstrap only."
+variable "ssh_private_key_path" {
+  description = "Path to the matching SSH private key file. Read at apply time, never stored in tfvars."
   type        = string
-  sensitive   = true
+  default     = "~/.ssh/verolas_dev"
 }
 
 variable "kube_apiserver_allow_ips" {

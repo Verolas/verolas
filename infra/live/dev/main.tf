@@ -40,8 +40,8 @@ module "k8s" {
   worker_server_type                = "cx22"
   allow_scheduling_on_control_plane = true
 
-  ssh_public_key  = var.ssh_public_key
-  ssh_private_key = var.ssh_private_key
+  ssh_public_key  = file(pathexpand(var.ssh_public_key_path))
+  ssh_private_key = file(pathexpand(var.ssh_private_key_path))
 
   k3s_channel              = "v1.31"
   kube_apiserver_allow_ips = var.kube_apiserver_allow_ips
