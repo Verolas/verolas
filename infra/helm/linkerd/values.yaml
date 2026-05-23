@@ -1,0 +1,45 @@
+controlPlaneVersion: edge
+
+clusterDomain: cluster.local
+clusterNetworks: "10.244.0.0/16"
+
+identityTrustDomain: cluster.local
+
+# identityTrustAnchorsPEM, identity.issuer.tls.crtPEM, identity.issuer.tls.keyPEM
+# are provided via --set-file at install time. See infra/helm/README.md install order.
+
+controllerReplicas: 2
+
+destinationController:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+identityController:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+proxyInjector:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+proxy:
+  image:
+    version: edge
+  resources:
+    cpu:
+      request: 100m
+      limit: 1000m
+    memory:
+      request: 64Mi
+      limit: 256Mi
+
+linkerd2-cni:
+  enabled: false
+
+# Linkerd Viz is installed separately for observability.

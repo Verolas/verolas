@@ -1,0 +1,25 @@
+installCRDs: true
+
+replicaCount: 2
+
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: false
+
+webhook:
+  replicaCount: 2
+
+cainjector:
+  replicaCount: 2
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# ClusterIssuer manifests are applied separately, not via the cert-manager chart.
+# See infra/helm/cert-manager/clusterissuers.yaml once that file is added.
