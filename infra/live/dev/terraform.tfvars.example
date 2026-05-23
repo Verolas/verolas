@@ -1,0 +1,28 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored. Never commit secrets.
+
+hcloud_token          = "<hetzner-cloud-api-token-for-verolas-dev>"
+hetzner_s3_access_key = "<hetzner-object-storage-access-key>"
+hetzner_s3_secret_key = "<hetzner-object-storage-secret-key>"
+
+cloudflare_api_token  = "<cloudflare-api-token-with-zone-dns-edit-on-verolas.com>"
+cloudflare_account_id = "<cloudflare-account-id>"
+
+# SSH key pair, ed25519. Generate with:
+#   ssh-keygen -t ed25519 -C verolas-dev -f ~/.ssh/verolas_dev
+ssh_public_key  = "ssh-ed25519 AAAA... verolas-dev"
+ssh_private_key = <<-EOT
+-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----
+EOT
+
+# IP allowlists for kube apiserver and SSH. Use your home IP or VPN egress IP.
+# Empty list means locked down (no access).
+kube_apiserver_allow_ips = [
+  # "203.0.113.42/32",
+]
+
+ssh_allow_ips = [
+  # "203.0.113.42/32",
+]

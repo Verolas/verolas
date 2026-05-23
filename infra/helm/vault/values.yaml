@@ -1,0 +1,94 @@
+global:
+  enabled: true
+  tlsDisable: false
+
+server:
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+        listener "tcp" {
+          tls_disable = 0
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file  = "/vault/userconfig/vault-tls/tls.key"
+        }
+        storage "raft" {
+          path = "/vault/data"
+        }
+        service_registration "kubernetes" {}
+
+  affinity: |
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ template "vault.name" . }}
+              app.kubernetes.io/instance: "{{ .Release.Name }}"
+              component: server
+          topologyKey: kubernetes.io/hostname
+
+  dataStorage:
+    enabled: true
+    size: 20Gi
+    storageClass: hcloud-volumes
+    accessMode: ReadWriteOnce
+
+  auditStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: hcloud-volumes
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  serviceAccount:
+    create: true
+    name: vault
+
+  extraEnvironmentVars:
+    VAULT_CACERT: /vault/userconfig/vault-tls/ca.crt
+
+  volumes:
+    - name: vault-tls
+      secret:
+        secretName: vault-tls
+        defaultMode: 0400
+
+  volumeMounts:
+    - name: vault-tls
+      mountPath: /vault/userconfig/vault-tls
+      readOnly: true
+
+  standalone:
+    enabled: false
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+
+injector:
+  enabled: true
+  replicas: 2
+
+csi:
+  enabled: false
+
+# Init is manual.
+# After helm install completes:
+#   kubectl exec -n vault vault-0 -- vault operator init -key-shares=5 -key-threshold=3
+# Capture all five unseal keys and the root token into the founder password manager.
+# Unseal each of the three pods with three of the five keys:
+#   kubectl exec -n vault vault-0 -- vault operator unseal <key>
+#   kubectl exec -n vault vault-1 -- vault operator unseal <key>
+#   kubectl exec -n vault vault-2 -- vault operator unseal <key>

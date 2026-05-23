@@ -11,3 +11,4 @@ Numbered index:
 
 - ADR 000: Template (not a decision, scaffolding only)
 - ADR 001: Monorepo layout and stack baseline
+- ADR 002: Infrastructure baseline (Hetzner, kube-hetzner, OpenTofu, Cloudflare)

@@ -1,0 +1,63 @@
+deployment:
+  replicas: 2
+
+service:
+  type: LoadBalancer
+  annotations:
+    load-balancer.hetzner.cloud/use-private-ip: "true"
+    load-balancer.hetzner.cloud/protocol: "tcp"
+    load-balancer.hetzner.cloud/location: "nbg1"
+    load-balancer.hetzner.cloud/type: "lb11"
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+  name: traefik
+
+ports:
+  web:
+    port: 8000
+    expose:
+      default: true
+    exposedPort: 80
+    redirectTo:
+      port: websecure
+      scheme: https
+  websecure:
+    port: 8443
+    expose:
+      default: true
+    exposedPort: 443
+    tls:
+      enabled: true
+
+logs:
+  access:
+    enabled: true
+    format: json
+  general:
+    level: INFO
+
+providers:
+  kubernetesIngress:
+    enabled: true
+    allowExternalNameServices: false
+  kubernetesCRD:
+    enabled: true
+    allowExternalNameServices: false
+
+metrics:
+  prometheus:
+    enabled: true
+    addServicesLabels: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Per environment override: ports.web.exposedPort / ports.websecure.exposedPort
+# and the LB annotations above. dev uses LB11, prod will use LB21 or larger.

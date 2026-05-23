@@ -1,0 +1,75 @@
+expose:
+  type: ingress
+  tls:
+    enabled: true
+    certSource: secret
+    secret:
+      secretName: harbor-tls
+  ingress:
+    hosts:
+      core: harbor.dev.verolas.com
+    className: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-staging
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+
+externalURL: https://harbor.dev.verolas.com
+
+persistence:
+  enabled: true
+  resourcePolicy: keep
+  persistentVolumeClaim:
+    registry:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 100Gi
+    jobservice:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 5Gi
+    database:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 20Gi
+    redis:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 5Gi
+    trivy:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 10Gi
+
+harborAdminPassword: "<override-via-secret-on-install>"
+
+logLevel: info
+
+portal:
+  replicas: 2
+core:
+  replicas: 2
+jobservice:
+  replicas: 2
+registry:
+  replicas: 2
+
+trivy:
+  enabled: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+notary:
+  enabled: false
+
+chartmuseum:
+  enabled: false
+
+metrics:
+  enabled: true
+
+# Cosign image signing is handled outside this chart via the cosign binary on CI runners.
+# Image scanning is via Trivy, included above.
+# Per environment overrides: expose.ingress.hosts.core, externalURL, persistence sizes.
