@@ -1,0 +1,45 @@
+# Single replica Redis for the dev cluster. Fits inside the CX23 budget.
+# Prod uses values-prod.yaml with Sentinel and three replicas.
+
+architecture: standalone
+
+auth:
+  enabled: true
+  # The password lives in a secret applied separately, see README.md.
+  existingSecret: redis-auth
+  existingSecretPasswordKey: password
+
+master:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    storageClass: hcloud-volumes
+    size: 5Gi
+  configuration: |
+    maxmemory 192mb
+    maxmemory-policy allkeys-lru
+    save 900 1
+    save 300 10
+    save 60 10000
+    appendonly yes
+    appendfsync everysec
+
+replica:
+  replicaCount: 0
+
+sentinel:
+  enabled: false
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+networkPolicy:
+  enabled: false

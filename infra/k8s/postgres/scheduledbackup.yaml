@@ -1,0 +1,14 @@
+# Daily full backup of the verolas-pg cluster.
+# WAL archiving runs continuously via the cluster's backup.barmanObjectStore
+# config, so PITR is available between full backup checkpoints.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: verolas-pg-daily
+  namespace: postgres
+spec:
+  schedule: "0 2 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: verolas-pg
+  immediate: true
