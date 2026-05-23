@@ -13,21 +13,16 @@ variable "hcloud_token" {
   sensitive   = true
 }
 
-variable "network_id" {
-  description = "Hetzner Cloud network ID created by the network module."
-  type        = number
-}
-
-variable "network_cidr" {
-  description = "Top level CIDR of the Hetzner network."
+variable "network_region" {
+  description = "Hetzner network region. eu-central for EU datacenters, us-east for Ashburn."
   type        = string
-  default     = "10.42.0.0/16"
+  default     = "eu-central"
 }
 
 variable "region" {
-  description = "Hetzner Cloud datacenter for nodes. Falkenstein for prod, Nuremberg for staging, either for dev."
+  description = "Hetzner Cloud datacenter for nodes. fsn1 (Falkenstein), nbg1 (Nuremberg), hel1 (Helsinki)."
   type        = string
-  default     = "fsn1"
+  default     = "nbg1"
   validation {
     condition     = contains(["fsn1", "nbg1", "hel1"], var.region)
     error_message = "region must be one of fsn1 (Falkenstein), nbg1 (Nuremberg), hel1 (Helsinki)."
@@ -35,7 +30,7 @@ variable "region" {
 }
 
 variable "control_plane_count" {
-  description = "Number of control plane nodes. Must be odd (1 or 3 for HA)."
+  description = "Number of control plane nodes. Must be odd (1, 3, or 5)."
   type        = number
   default     = 3
   validation {
@@ -45,13 +40,13 @@ variable "control_plane_count" {
 }
 
 variable "control_plane_server_type" {
-  description = "Hetzner Cloud server type for control plane nodes."
+  description = "Hetzner Cloud server type for control plane nodes. Minimum cx23."
   type        = string
-  default     = "ccx13"
+  default     = "cx23"
 }
 
 variable "worker_count" {
-  description = "Number of worker nodes. Set to 0 for single node clusters; in that case set allow_scheduling_on_control_plane = true so workloads can run on the control plane."
+  description = "Number of worker nodes. Set to 0 for single node clusters; set allow_scheduling_on_control_plane = true so workloads can run on the control plane."
   type        = number
   default     = 3
   validation {
@@ -60,55 +55,48 @@ variable "worker_count" {
   }
 }
 
+variable "worker_server_type" {
+  description = "Hetzner Cloud server type for worker nodes. Minimum cx23."
+  type        = string
+  default     = "cx23"
+}
+
 variable "allow_scheduling_on_control_plane" {
   description = "If true, removes the NoSchedule taint from control plane nodes so workloads can run on them. Required when worker_count is 0."
   type        = bool
   default     = false
 }
 
-variable "create_load_balancer" {
-  description = "If true, kube-hetzner provisions a Hetzner Cloud load balancer. Single node dev sets this false to save cost."
-  type        = bool
-  default     = true
-}
-
-variable "worker_server_type" {
-  description = "Hetzner Cloud server type for worker nodes."
-  type        = string
-  default     = "ccx23"
-}
-
 variable "ssh_public_key" {
-  description = "SSH public key in OpenSSH format. Used by kube-hetzner to provision nodes."
+  description = "SSH public key in OpenSSH format."
   type        = string
 }
 
 variable "ssh_private_key" {
-  description = "Path or contents of the matching SSH private key. Used by kube-hetzner during bootstrap. Set to null to skip and require manual SSH steps."
+  description = "Matching SSH private key contents."
   type        = string
   sensitive   = true
-  default     = null
 }
 
 variable "k3s_channel" {
-  description = "k3s release channel. Pin to a specific minor (e.g. v1.31) for reproducibility."
+  description = "k3s release channel."
   type        = string
   default     = "v1.31"
 }
 
 variable "kube_apiserver_allow_ips" {
-  description = "CIDRs allowed to reach the Kubernetes API server."
+  description = "CIDRs allowed to reach the Kubernetes API server. Empty list means kube-hetzner uses its own default."
   type        = list(string)
   default     = []
 }
 
 variable "ssh_allow_ips" {
-  description = "CIDRs allowed to SSH to nodes."
+  description = "CIDRs allowed to SSH to nodes. Empty list means kube-hetzner uses its own default."
   type        = list(string)
   default     = []
 }
 
 variable "base_domain" {
-  description = "Base domain attached to this cluster, e.g. dev.verolas.com."
+  description = "Base domain attached to this cluster, e.g. dev.verolas.com. Used by kube-hetzner for resource labels."
   type        = string
 }

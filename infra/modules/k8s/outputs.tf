@@ -10,8 +10,8 @@ output "control_plane_ipv4" {
 }
 
 output "load_balancer_ipv4" {
-  description = "Public IPv4 of the cluster load balancer."
-  value       = module.cluster.lb_ingress_ipv4
+  description = "Public IPv4 of the cluster ingress load balancer, if one was created."
+  value       = module.cluster.ingress_public_ipv4
 }
 
 output "cluster_name" {
