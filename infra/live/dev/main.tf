@@ -1,7 +1,7 @@
 locals {
-  env        = "dev"
-  region     = "nbg1"
-  zone_name  = "verolas.com"
+  env          = "dev"
+  region       = "nbg1"
+  zone_name    = "verolas.com"
   network_cidr = "10.42.0.0/16"
   labels = {
     env     = "dev"
@@ -32,10 +32,13 @@ module "k8s" {
   network_cidr = local.network_cidr
   region       = local.region
 
-  control_plane_count       = 3
-  control_plane_server_type = "ccx13"
-  worker_count              = 3
-  worker_server_type        = "ccx23"
+  # Single node topology for early development. Scale up to 3 + 3 when product
+  # workloads or a pilot make HA necessary; see infra/live/dev/README.md.
+  control_plane_count               = 1
+  control_plane_server_type         = "cx22"
+  worker_count                      = 0
+  worker_server_type                = "cx22"
+  allow_scheduling_on_control_plane = true
 
   ssh_public_key  = var.ssh_public_key
   ssh_private_key = var.ssh_private_key
@@ -49,10 +52,13 @@ module "k8s" {
 module "dns" {
   source = "../../modules/cloudflare-dns"
 
-  env                           = local.env
-  zone_name                     = local.zone_name
-  env_subdomain_target          = module.k8s.load_balancer_ipv4
+  env       = local.env
+  zone_name = local.zone_name
+
+  # Single node dev has no Hetzner load balancer. Public DNS records are
+  # deferred until either a load balancer or Cloudflare Tunnel is in place.
+  env_subdomain_target          = ""
   env_subdomain_proxied         = false
-  create_wildcard_env_subdomain = true
+  create_wildcard_env_subdomain = false
   create_caa                    = true
 }

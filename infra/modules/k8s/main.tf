@@ -34,7 +34,7 @@ module "cluster" {
     }
   ]
 
-  agent_nodepools = [
+  agent_nodepools = var.worker_count > 0 ? [
     {
       name        = "worker-${var.region}"
       server_type = var.worker_server_type
@@ -43,10 +43,12 @@ module "cluster" {
       labels      = ["nodepool=worker"]
       taints      = []
     }
-  ]
+  ] : []
 
   load_balancer_type      = "lb11"
   load_balancer_location  = var.region
+
+  allow_scheduling_on_control_plane = var.allow_scheduling_on_control_plane
 
   initial_k3s_channel     = var.k3s_channel
   automatically_upgrade_k3s     = false

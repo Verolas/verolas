@@ -4,13 +4,46 @@ Composition for the Verolas dev environment.
 
 ## Topology
 
-- Single Hetzner Cloud private network (`10.42.0.0/16`) in `eu-central`
-- 3 control plane nodes (CCX13) and 3 worker nodes (CCX23) in Nuremberg (`nbg1`)
-- k3s v1.31, Cilium CNI, Hetzner Cloud load balancer
+Single node k3s for early product development. This is intentionally small. Scale up when a pilot or HA testing requires it.
+
+- 1 Hetzner Cloud CX22 (2 vCPU, 4 GB RAM, 40 GB SSD) in Nuremberg (`nbg1`)
+- k3s v1.31, Cilium CNI, control plane untainted so workloads run on it
+- No Hetzner load balancer (cost saving); cluster is reachable via kubectl port-forward, SSH tunnel, or Cloudflare Tunnel when that lands
 - DNS records on the `verolas.com` zone:
-  - `dev.verolas.com` to the cluster load balancer
-  - `*.dev.verolas.com` wildcard CNAME for cluster services
-  - Apex and `www` left disabled until the marketing site exists
+  - `dev.verolas.com` not created yet (no LB target)
+  - CAA record present so future Let's Encrypt certs work
+
+## Cost ballpark
+
+Approximate monthly net cost (Hetzner price page is the source of truth):
+
+| Item | Qty | Monthly |
+| --- | --- | --- |
+| CX22 single node | 1 | 4.51 EUR |
+| Persistent volumes (50 GB) | | 2.00 EUR |
+| Object Storage state bucket | 1 | 5.99 EUR |
+| Private network | | 0.00 EUR |
+| Traffic (20 TB included) | | 0.00 EUR |
+| **Subtotal net** | | **~13 EUR** |
+| With 19% German VAT | | ~15 EUR |
+
+If your company has a registered VAT ID, Hetzner reverse charges and you pay the net price.
+
+## What does and does not run on this cluster
+
+The CX22 has 4 GB RAM. That comfortably runs k3s plus a small set of application services for development, but not the full prod stack.
+
+Fine to run today:
+
+- One Postgres instance for development data
+- One Redis
+- Application services from `apps/api`, `apps/web` once they land
+- cert-manager (small footprint, useful even on dev)
+- Traefik (only if you want HTTP routing inside the cluster)
+
+Defer until staging or prod (do not install on this dev node):
+
+- HashiCorp Vault HA, Harbor, Linkerd. These are scaffolded under `infra/helm/` for when staging arrives.
 
 ## Apply
 
@@ -30,18 +63,21 @@ Composition for the Verolas dev environment.
    export KUBECONFIG=~/.kube/verolas-dev.yaml
    kubectl get nodes
    ```
-5. Install in cluster services per `infra/helm/README.md`.
+   You should see one node, `Ready`, role `control-plane`.
 
-## Cost ballpark
+## Scaling up later
 
-At the time of writing, this dev topology runs approximately:
+When you need HA or more capacity, change `infra/live/dev/main.tf`:
 
-- 3 control plane CCX13: about 14 EUR per node per month
-- 3 worker CCX23: about 26 EUR per node per month
-- 1 load balancer (LB11): about 6 EUR per month
-- Network and traffic: under 5 EUR per month at dev scale
+```hcl
+control_plane_count               = 3
+control_plane_server_type         = "ccx13"
+worker_count                      = 3
+worker_server_type                = "ccx23"
+allow_scheduling_on_control_plane = false
+```
 
-Roughly 130 EUR per month for the dev cluster. Confirm against the current Hetzner pricing page before applying.
+Then `tofu plan` will show the additional nodes joining. Expect roughly 140 EUR per month net at that shape.
 
 ## Tear down
 
@@ -49,4 +85,4 @@ Roughly 130 EUR per month for the dev cluster. Confirm against the current Hetzn
 tofu destroy
 ```
 
-Acceptable for dev. Never run in staging or prod without an explicit decision and a backup of state.
+Acceptable for dev. Stops the billing.

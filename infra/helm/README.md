@@ -2,6 +2,13 @@
 
 Each subdirectory holds a `values.yaml` for a service installed into the cluster after OpenTofu has brought the cluster up. Install order is fixed and matters.
 
+## Which environments install what
+
+The dev cluster is single node CX22 (4 GB RAM). The full Helm stack below targets staging and prod. On dev, install only what fits:
+
+- Always fine on dev: cert-manager (if certs are needed), Traefik (if HTTP routing inside the cluster is needed).
+- Do not install on dev: HashiCorp Vault HA, Harbor, Linkerd. These chew memory and assume HA topology. Scaffolded in this directory for staging and prod.
+
 ## Install order
 
 ```bash

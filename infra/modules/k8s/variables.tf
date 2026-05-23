@@ -51,9 +51,25 @@ variable "control_plane_server_type" {
 }
 
 variable "worker_count" {
-  description = "Number of worker nodes."
+  description = "Number of worker nodes. Set to 0 for single node clusters; in that case set allow_scheduling_on_control_plane = true so workloads can run on the control plane."
   type        = number
   default     = 3
+  validation {
+    condition     = var.worker_count >= 0
+    error_message = "worker_count must be 0 or greater."
+  }
+}
+
+variable "allow_scheduling_on_control_plane" {
+  description = "If true, removes the NoSchedule taint from control plane nodes so workloads can run on them. Required when worker_count is 0."
+  type        = bool
+  default     = false
+}
+
+variable "create_load_balancer" {
+  description = "If true, kube-hetzner provisions a Hetzner Cloud load balancer. Single node dev sets this false to save cost."
+  type        = bool
+  default     = true
 }
 
 variable "worker_server_type" {
