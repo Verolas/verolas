@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verolas-api
+  namespace: verolas-api
+  labels:
+    app.kubernetes.io/name: verolas-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: verolas-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: verolas-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: ghcr.io/verolas/api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: VEROLAS_API_ENVIRONMENT
+              value: dev
+            - name: VEROLAS_API_LOG_LEVEL
+              value: INFO
+            - name: VEROLAS_API_LOG_JSON
+              value: "true"
+            - name: VEROLAS_API_OIDC_ISSUER
+              value: http://keycloak.keycloak.svc.cluster.local/realms/verolas
+            - name: VEROLAS_API_OIDC_AUDIENCE
+              value: verolas-api
+            - name: VEROLAS_API_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: verolas-api-db
+                  key: database_url
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verolas-api
+  namespace: verolas-api
+  labels:
+    app.kubernetes.io/name: verolas-api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: verolas-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

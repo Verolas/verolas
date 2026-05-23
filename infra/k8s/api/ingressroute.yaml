@@ -1,0 +1,55 @@
+# Traefik IngressRoute plus the rate limiting middleware that gates every
+# request to the API. Applied on the dev cluster once Traefik is installed.
+# Per environment overrides for the host and TLS cluster issuer live in
+# values-<env>.yaml siblings of the Helm install.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: verolas-api-ratelimit
+  namespace: verolas-api
+spec:
+  rateLimit:
+    average: 60
+    burst: 120
+    period: 1m
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: verolas-api-headers
+  namespace: verolas-api
+spec:
+  headers:
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    referrerPolicy: strict-origin-when-cross-origin
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    customResponseHeaders:
+      X-Verolas-Service: verolas-api
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: verolas-api
+  namespace: verolas-api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api.dev.verolas.com`) && PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: verolas-api
+          port: 80
+      middlewares:
+        - name: verolas-api-ratelimit
+        - name: verolas-api-headers
+  tls:
+    secretName: verolas-api-tls

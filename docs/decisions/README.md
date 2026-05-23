@@ -15,3 +15,4 @@ Numbered index:
 - ADR 003: CI/CD foundation, GitHub Actions on hosted runners, pre commit hooks
 - ADR 004: Database foundation, CloudNativePG, pgvector, Bitnami Redis, Alembic
 - ADR 005: Auth and multi tenancy, Keycloak, six role RBAC, Postgres RLS, mandatory TOTP
+- ADR 006: Core backend skeleton, FastAPI, structlog, Prometheus, SLA tiering
