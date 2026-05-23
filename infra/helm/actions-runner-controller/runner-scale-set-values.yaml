@@ -1,0 +1,47 @@
+runnerScaleSetName: verolas-runners
+
+githubConfigUrl: https://github.com/Verolas/verolas
+
+githubConfigSecret: arc-github-app
+
+minRunners: 0
+maxRunners: 3
+
+containerMode:
+  type: kubernetes
+  kubernetesModeWorkVolumeClaim:
+    accessModes: [ReadWriteOnce]
+    storageClassName: hcloud-volumes
+    resources:
+      requests:
+        storage: 10Gi
+
+template:
+  spec:
+    serviceAccountName: arc-runner
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        env:
+          - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
+            value: 'false'
+        resources:
+          requests:
+            cpu: 250m
+            memory: 768Mi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+
+listenerTemplate:
+  spec:
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi

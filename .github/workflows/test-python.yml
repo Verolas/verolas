@@ -1,0 +1,89 @@
+name: test-python
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'services/**/*.py'
+      - 'services/**/pyproject.toml'
+      - '.github/workflows/test-python.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'services/**/*.py'
+      - 'services/**/pyproject.toml'
+
+concurrency:
+  group: test-python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: discover Python projects
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+      has_projects: ${{ steps.find.outputs.has_projects }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find pyproject.toml files
+        id: find
+        run: |
+          projects=$(find apps services -name pyproject.toml -not -path '*/.*' 2>/dev/null | sort)
+          if [ -z "$projects" ]; then
+            echo "has_projects=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
+            echo "No pyproject.toml files found, Python tests will skip."
+            exit 0
+          fi
+          include="["
+          while IFS= read -r p; do
+            dir=$(dirname "$p")
+            name=$(basename "$dir")
+            include+="{\"dir\":\"$dir\",\"name\":\"$name\"},"
+          done <<< "$projects"
+          include="${include%,}]"
+          echo "has_projects=true" >> "$GITHUB_OUTPUT"
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: test ${{ matrix.name }}
+    needs: discover
+    if: needs.discover.outputs.has_projects == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.dir }}
+        run: uv sync --frozen
+
+      - name: Ruff format check
+        working-directory: ${{ matrix.dir }}
+        run: uv run ruff format --check .
+
+      - name: Ruff lint
+        working-directory: ${{ matrix.dir }}
+        run: uv run ruff check .
+
+      - name: mypy
+        working-directory: ${{ matrix.dir }}
+        run: uv run mypy .
+
+      - name: pytest
+        working-directory: ${{ matrix.dir }}
+        run: uv run pytest -v

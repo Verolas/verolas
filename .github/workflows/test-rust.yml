@@ -1,0 +1,73 @@
+name: test-rust
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '**/*.rs'
+      - '.github/workflows/test-rust.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '**/*.rs'
+
+concurrency:
+  group: test-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: discover Rust crates
+    runs-on: ubuntu-24.04
+    outputs:
+      has_crates: ${{ steps.find.outputs.has_crates }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find Cargo.toml files
+        id: find
+        run: |
+          crates=$(find packages services -name Cargo.toml -not -path '*/target/*' -not -path '*/.*' 2>/dev/null | sort)
+          if [ -z "$crates" ]; then
+            echo "has_crates=false" >> "$GITHUB_OUTPUT"
+            echo "No Cargo.toml files found, Rust tests will skip."
+          else
+            echo "has_crates=true" >> "$GITHUB_OUTPUT"
+            echo "$crates"
+          fi
+
+  test:
+    name: fmt, clippy, test
+    needs: discover
+    if: needs.discover.outputs.has_crates == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: cargo fmt check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace --all-features

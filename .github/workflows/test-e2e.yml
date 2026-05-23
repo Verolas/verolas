@@ -1,0 +1,75 @@
+name: test-e2e
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/test-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+
+concurrency:
+  group: test-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: discover Playwright config
+    runs-on: ubuntu-24.04
+    outputs:
+      has_e2e: ${{ steps.find.outputs.has_e2e }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Look for Playwright config
+        id: find
+        run: |
+          if ls apps/web/playwright.config.* >/dev/null 2>&1; then
+            echo "has_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "No playwright.config.* in apps/web, E2E tests will skip."
+          fi
+
+  e2e:
+    name: Playwright
+    needs: discover
+    if: needs.discover.outputs.has_e2e == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm build
+
+      - name: Playwright tests
+        working-directory: apps/web
+        run: pnpm exec playwright test
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

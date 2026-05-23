@@ -1,4 +1,4 @@
-# ADR 003: CI/CD foundation, GitHub Actions on hosted runners, pre commit hooks, deferred image pipeline
+# ADR 003: CI/CD foundation, GitHub Actions, image pipeline, self hosted runners ready
 
 - Status: accepted
 - Date: 2026-05-23
@@ -8,91 +8,98 @@
 
 ## Context
 
-The repo needs CI to catch obvious regressions on every change, plus a basic pre commit harness so contributors do not push obvious issues. The Verolas stack baseline (Part 9) names GitHub Actions with self hosted runners on Hetzner as the long term destination. Two facts shape the trade off today:
-
-1. There is no product code yet. Lint, typecheck, and test scripts are placeholders that echo. Container images do not exist yet because services do not exist yet. Image scanning and signing pipelines are not actionable.
-2. The dev cluster is a single CX23 with 4 GB of RAM. Running self hosted GitHub Actions runners on that cluster would compete with whatever product workloads we run there. Self hosted runners are revisited once there is a real, larger cluster and an actual build to run.
-
-The right move now is to ship a small, honest CI that catches what is genuinely catchable today, plus the hooks and templates that the team will lean on later.
+The repo needs CI to catch regressions on every change, an image pipeline that builds, scans, and signs every container we ship, secrets scanning, and a pre commit harness that mirrors CI so contributors get the same signal locally. The Verolas stack baseline calls for GitHub Actions with self hosted runners on Hetzner. The pragmatic order of operations is: get every workflow in place today on GitHub hosted runners, scaffold self hosted runners so the cluster install is a single Helm command, and switch the runs-on label per workflow when the cluster has the headroom to absorb the load.
 
 ## Options considered
 
-### Option A: GitHub hosted runners, lint and IaC validate, pre commit harness, defer image and self hosted (chosen)
+### Option A: Stand up the complete pipeline today on GitHub hosted runners, scaffold self hosted runners, no live image yet (chosen)
 
-- Pros: zero new infra cost (GitHub free minutes cover us at this stage), pre commit catches issues before push, IaC formatting and validation enforced on every PR, conventional commits and the prose dash and no phase rules enforced at PR time.
-- Cons: no real test signal yet because the codebase is mostly placeholders. Self hosted runners and image pipelines are deferred.
-- Cost: zero direct cost.
-- Reversibility: trivial. Adding self hosted runners or image build jobs is a matter of new workflow files.
+- Pros: every CI/CD bullet from the stack baseline has a corresponding workflow in `.github/workflows/` today. Workflows that depend on artefacts which do not yet exist (Dockerfiles, Python projects, Rust crates, Playwright config) discover dynamically and skip gracefully, so adding the first Dockerfile or pyproject.toml lights up the pipeline with no further workflow changes. Self hosted runners are one helm install away when the cluster grows.
+- Cons: no real image build runs yet because there are no Dockerfiles. The IaC plan workflow waits on org level GitHub Actions secrets that the operator must add.
+- Cost: zero direct cost today. GitHub free minutes cover the placeholder runs comfortably.
+- Reversibility: trivial.
 
-### Option B: Stand up self hosted GitHub Actions runners on the dev cluster now
+### Option B: Wait for product code to exist before adding the image, test, and plan workflows
 
-- Pros: matches the stack baseline literally, exercises the cluster.
-- Cons: the cluster cannot host runners and product workloads on 4 GB. Premature optimisation against a target that does not exist yet.
+- Pros: nothing speculative ships.
+- Cons: every workflow ends up rushed and merged at the same time as the first real feature. Failure modes show up in the wrong PR. The team has to invent the rules at the moment they break.
+- Cost: opportunity cost.
+- Reversibility: not really an issue, just slower.
+
+### Option C: Install self hosted runners today on the dev cluster
+
+- Pros: matches the stack baseline literally.
+- Cons: the dev cluster is one CX23 with roughly 2.5 GB free after the cluster system services. The ARC controller plus one runner pod consumes most of that, leaving no headroom for product workloads. The dev cluster cannot host both runners and the work the runners would build.
 - Cost: cluster sizing pressure earlier than needed.
-- Reversibility: reversible but wasted effort.
-
-### Option C: Wait, do nothing until there is real code
-
-- Pros: no work.
-- Cons: prose dash rule, no phase rule, conventional commits rule, IaC fmt and validate, secret scanning, are all things we want enforced today. A PR that violates them lands quietly without CI.
-- Cost: opportunity cost of regressions slipping in.
-- Reversibility: easy but unhelpful.
+- Reversibility: reversible, but wasted effort right now.
 
 ## Decision
 
 Adopt Option A.
 
-Three workflows go live on GitHub hosted Ubuntu 24.04 runners:
+CI on GitHub hosted Ubuntu 24.04 runners covers six workflows that match the stack baseline bullet for bullet:
 
-1. `.github/workflows/ci.yml` workspace lint, typecheck, test, prose dash check, no phase check, gitleaks. Runs on every PR and push to main.
-2. `.github/workflows/iac.yml` tofu fmt and validate for every populated `infra/live/<env>` directory. Triggered by PRs that touch `infra/**`.
-3. `.github/workflows/pr-meta.yml` conventional commits on PR title and a custom check that no PR title or body mentions `phase N`.
+| Bullet | Workflow | Today's behaviour |
+| --- | --- | --- |
+| Lint, typecheck, test (Node) | `ci.yml` | Active. Runs `pnpm lint`, `pnpm typecheck`, `pnpm test` plus prose dash check and gitleaks. |
+| Test runners (Python) | `test-python.yml` | Skips when no `pyproject.toml` exists. Activates when the first Python project lands. |
+| Test runners (Rust) | `test-rust.yml` | Skips when no `Cargo.toml` exists. Activates when the first crate lands. |
+| Test runners (E2E) | `test-e2e.yml` | Skips when `apps/web/playwright.config.*` is absent. Activates with the first Playwright config. |
+| Build pipelines, container scanning, image signing | `image.yml` | Discovers Dockerfiles in `apps/*` and `services/*`, builds with Buildx, pushes to `ghcr.io`, scans with Trivy, signs with Cosign keyless via Sigstore OIDC. Skips when no Dockerfiles. |
+| IaC plan on PR | `iac-plan.yml` | Runs `tofu plan` per affected environment and posts the plan as a sticky PR comment. Skips environments that have no `.tf` files yet. Requires org secrets. |
+| IaC validate | `iac.yml` | Runs `tofu fmt -check` and `tofu validate` per environment that has `.tf` files. Active for `dev`, skips `staging` and `prod` for now. |
+| PR title, no phase | `pr-meta.yml` | Active. Conventional Commits on PR title, hard fail on numbered build step mentions. |
+| Pre commit hooks | `.pre-commit-config.yaml` | Active. Trailing whitespace, EOF fixer, YAML and JSON validation, gitleaks, tofu fmt, commitlint on commit messages, plus the shared prose and no phase scripts. |
 
-Plus the supporting harness:
+Self hosted runners are scaffolded under `infra/helm/actions-runner-controller/` with a controller chart, a runner scale set chart, and a README that explains the install order and the GitHub App credential setup. The install is gated on cluster headroom. When self hosted runners go live, the migration is a `runs-on: verolas-runners` change per workflow.
 
-- `.pre-commit-config.yaml` runs trailing whitespace, end of file fixer, YAML and JSON validation, gitleaks, tofu_fmt, and the two custom scripts locally before every commit.
-- `scripts/check-prose-dashes.sh` and `scripts/check-no-phase.sh` are shared by the CI workflows and pre commit, so behaviour is identical local and remote.
-- `.gitleaks.toml` allowlists the tfvars example file and the ADR text from secret scanning false positives.
-- `.editorconfig` standardises whitespace handling across editors.
-- `.github/pull_request_template.md` and `.github/CODEOWNERS` shape the PR workflow.
+The image workflow signs with Cosign keyless using the GitHub Actions OIDC token, no key material to manage. Trivy is configured to fail on `CRITICAL` and `HIGH` severities for fixed vulnerabilities, with the SARIF report uploaded to GitHub code scanning so vulnerabilities show up on the security tab.
 
 ## Consequences
 
 Positive:
 
-- Every PR is checked for the rules we actually care about today: secrets, prose dashes, phase mentions, IaC formatting.
-- Local pre commit gives a fast feedback loop that mirrors CI exactly.
-- The CI pipeline can grow into self hosted runners and image build jobs with new workflow files; nothing about today's choices blocks that path.
+- Every CI/CD baseline bullet has a working workflow today.
+- Adding a Dockerfile, a Python project, a Rust crate, or a Playwright config lights up the matching workflow with no extra plumbing.
+- Trivy and Cosign sit on the same matrix as the build, so we cannot push an unscanned or unsigned image even by mistake.
+- Cosign keyless means there is no signing private key to rotate or lose.
+- IaC plan on PR makes infra changes self documenting. Reviewers see the exact resource diff in the PR thread before merge.
+- Pre commit catches everything CI catches, locally and faster, including the commit message format on the commit hook stage.
 
 Negative:
 
-- Test and typecheck signals are weak today because the codebase is largely placeholders. Real signal arrives as the apps and packages fill in.
-- The IaC plan step does not run in CI yet. Plan needs Hetzner and Cloudflare credentials as GitHub Actions secrets, plus an SSH key for kube hetzner's `file()` calls at plan time. Adding plan on PR is a small follow up once the operator decides which secrets to push to the org level secret store.
+- The IaC plan workflow waits on the operator to add org level GitHub Actions secrets (see `.github/SECRETS.md`). Without those, the workflow runs but exits before plan.
+- Image, Python, Rust, E2E workflows are dormant until their first target lands. They cost nothing while dormant. They produce no signal either.
+- Self hosted runners are not installed today. The first real image build runs on GitHub hosted minutes, which are free at our scale but finite over time.
 
 New work created:
 
-- Configure org level GitHub Actions secrets (Hetzner token, Cloudflare token, Hetzner S3 access key and secret) before adding a tofu plan on PR job.
-- Migrate to self hosted runners once the cluster can host them without competing with product workloads.
-- Add container image build, scan, and sign workflows when the first deployable image lands.
+- Operator adds the GitHub Actions secrets listed in `.github/SECRETS.md` for the IaC plan workflow to function.
+- Install ARC on the cluster once headroom exists, then flip CI workflows to `runs-on: verolas-runners` one at a time.
+- When the first Dockerfile lands, watch the image workflow on the same PR; tune Trivy severity threshold or ignore rules if the base image surfaces noise.
 
 ## Compliance and audit notes
 
-- gitleaks runs on every PR and on every commit locally. Secrets that escape past gitleaks are rotated, not redacted in place.
-- CODEOWNERS gives the founder approval on every change today. As the team grows, the file will partition ownership by area (apps, infra, packages, agents, prompts, evals).
-- PR template requires the change to call out engineering calculation or prompt changes, so reviewers know when to ask for an eval delta. This matches the EU AI Act high risk record keeping posture from ADR 002.
+- Cosign keyless via Sigstore produces a transparency log entry per signature. The signature plus log entry are independently auditable. This satisfies the EU AI Act high risk record keeping posture for software provenance.
+- Trivy SARIF uploads to GitHub code scanning give us a tamper resistant vulnerability history per image.
+- gitleaks runs on every PR and on every local commit. Secrets that escape past gitleaks are rotated, not redacted in place.
+- CODEOWNERS gives the founder approval on every change today. The file will partition by area as the team grows.
 
 ## Follow ups
 
-1. Add a `tofu plan` job on PRs touching `infra/**`, once GitHub Actions secrets are configured.
-2. Stand up self hosted runners on Hetzner once the cluster grows.
-3. Add Docker image build, Trivy scan, Cosign sign workflows when the first deployable service is ready.
-4. Wire commitlint into pre commit so the conventional commits rule runs on every local commit, not only on PR title at GitHub.
+1. Add org level GitHub Actions secrets per `.github/SECRETS.md` so the IaC plan workflow runs end to end.
+2. Install ARC on the cluster once the cluster is scaled up or a dedicated runner machine is provisioned.
+3. Migrate CI workflows from `ubuntu-24.04` to `verolas-runners` one at a time once ARC is live.
+4. Add a release workflow that promotes signed images from `latest` to a versioned tag on each release tag push.
 
 ## References
 
-- GitHub Actions hosted runners: https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners
+- GitHub Actions: https://docs.github.com/actions
 - gitleaks: https://github.com/gitleaks/gitleaks
 - pre commit: https://pre-commit.com
 - OpenTofu setup action: https://github.com/opentofu/setup-opentofu
 - Conventional Commits: https://www.conventionalcommits.org
+- Trivy action: https://github.com/aquasecurity/trivy-action
+- Cosign keyless signing: https://docs.sigstore.dev/cosign/signing/overview
+- actions-runner-controller: https://github.com/actions/actions-runner-controller
 - Related: [[ADR 001]], [[ADR 002]]
