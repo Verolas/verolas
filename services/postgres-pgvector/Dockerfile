@@ -6,7 +6,7 @@
 # Built and pushed by the image workflow at .github/workflows/image.yml.
 # Image is consumed by infra/k8s/postgres/cluster-*.yaml via the imageName field.
 
-FROM ghcr.io/cloudnative-pg/postgresql:17.0-standard-bookworm
+FROM ghcr.io/cloudnative-pg/postgresql:17
 
 USER root
 
