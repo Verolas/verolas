@@ -21,6 +21,8 @@ WORKDIR /workspace
 
 COPY services/auth/pyproject.toml services/auth/uv.lock services/auth/README.md services/auth/
 COPY services/auth/verolas_auth services/auth/verolas_auth
+COPY services/storage/pyproject.toml services/storage/uv.lock services/storage/
+COPY services/storage/verolas_storage services/storage/verolas_storage
 COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md apps/api/
 COPY apps/api/verolas_api apps/api/verolas_api
 

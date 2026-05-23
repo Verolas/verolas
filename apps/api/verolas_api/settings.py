@@ -31,3 +31,19 @@ class Settings(BaseSettings):
         default=None,
         description="postgresql+psycopg://user:pass@host:5432/verolas. None disables DB routes.",
     )
+
+    storage_endpoint_url: str | None = Field(
+        default=None,
+        description="Hetzner Object Storage endpoint, e.g. https://nbg1.your-objectstorage.com",
+    )
+    storage_region: str = Field(default="nbg1")
+    storage_access_key_id: str = Field(default="")
+    storage_secret_access_key: str = Field(default="")
+    storage_bucket: str = Field(default="verolas-files-dev")
+    storage_presign_expiry_seconds: int = Field(default=900, ge=60, le=7 * 24 * 3600)
+
+    clamd_host: str | None = Field(
+        default=None,
+        description="ClamAV daemon host. None disables scan, leaving file status at scanning.",
+    )
+    clamd_port: int = Field(default=3310, ge=1, le=65535)
