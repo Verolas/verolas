@@ -97,7 +97,7 @@ jobs:
 
       - name: Trivy scan ${{ matrix.name }}
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
           format: sarif

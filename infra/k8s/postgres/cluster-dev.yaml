@@ -1,0 +1,93 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: verolas-pg
+  namespace: postgres
+  labels:
+    env: dev
+    project: verolas
+spec:
+  # Single instance for the dev cluster. Bump to 3 in prod for HA.
+  instances: 1
+
+  imageName: ghcr.io/verolas/postgres-pgvector:latest
+
+  # postgresUID and postgresGID must match the image's defaults (26).
+  postgresUID: 26
+  postgresGID: 26
+
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: 128MB
+      effective_cache_size: 384MB
+      work_mem: 4MB
+      maintenance_work_mem: 64MB
+      wal_compression: "on"
+      log_statement: ddl
+      log_min_duration_statement: "1000"
+    pg_hba:
+      - "host all all 10.0.0.0/8 scram-sha-256"
+
+  bootstrap:
+    initdb:
+      database: verolas
+      owner: verolas_app
+      encoding: UTF8
+      localeCType: en_US.utf8
+      localeCollate: en_US.utf8
+      postInitTemplateSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector;
+        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        - CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+  storage:
+    storageClass: hcloud-volumes
+    size: 20Gi
+
+  walStorage:
+    storageClass: hcloud-volumes
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  monitoring:
+    enablePodMonitor: true
+
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://verolas-pgbackup-dev/verolas-pg
+      endpointURL: https://nbg1.your-objectstorage.com
+      s3Credentials:
+        accessKeyId:
+          name: postgres-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: postgres-backup-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        encryption: AES256
+      data:
+        compression: gzip
+        encryption: AES256
+        immediateCheckpoint: false
+        jobs: 1
+    retentionPolicy: 14d
+
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+
+  serviceAccountTemplate:
+    metadata:
+      annotations: {}

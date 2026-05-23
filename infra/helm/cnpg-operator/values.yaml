@@ -1,0 +1,38 @@
+replicaCount: 1
+
+image:
+  imagePullPolicy: IfNotPresent
+
+monitoring:
+  podMonitorEnabled: true
+  grafanaDashboard:
+    create: false
+
+config:
+  data:
+    INHERITED_ANNOTATIONS: "categories"
+    INHERITED_LABELS: "environment,workload"
+    MONITORING_QUERIES_CONFIGMAP: cnpg-default-monitoring
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+webhook:
+  port: 9443
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+priorityClassName: ""
+
+# leaderElection avoids two operator pods racing in HA installs. Single
+# replica on dev means leader election is a no-op but the flag stays on
+# for parity with prod.
+leaderElection:
+  enabled: true

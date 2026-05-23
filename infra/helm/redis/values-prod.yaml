@@ -1,0 +1,64 @@
+# Three replica Redis with Sentinel for the prod cluster.
+# Not applied yet.
+
+architecture: replication
+
+auth:
+  enabled: true
+  existingSecret: redis-auth
+  existingSecretPasswordKey: password
+
+master:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  persistence:
+    enabled: true
+    storageClass: hcloud-volumes
+    size: 20Gi
+  configuration: |
+    maxmemory 1500mb
+    maxmemory-policy allkeys-lru
+    save 900 1
+    save 300 10
+    save 60 10000
+    appendonly yes
+    appendfsync everysec
+
+replica:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  persistence:
+    enabled: true
+    storageClass: hcloud-volumes
+    size: 20Gi
+
+sentinel:
+  enabled: true
+  quorum: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+  allowExternal: false

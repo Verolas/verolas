@@ -1,0 +1,108 @@
+# Production reference. Not applied yet. Adjust replica count, storage, and
+# resource limits to match the prod cluster size when that environment is live.
+#
+# Differences from cluster-dev.yaml:
+# - instances: 3 (HA)
+# - storage size: 200Gi data, 100Gi WAL
+# - resources: 1 CPU / 4 GiB requests, 4 CPU / 16 GiB limits
+# - backup retention: 90d
+# - synchronous replication on
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: verolas-pg
+  namespace: postgres
+  labels:
+    env: prod
+    project: verolas
+spec:
+  instances: 3
+
+  imageName: ghcr.io/verolas/postgres-pgvector:latest
+
+  postgresUID: 26
+  postgresGID: 26
+
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+
+  minSyncReplicas: 1
+  maxSyncReplicas: 1
+
+  postgresql:
+    parameters:
+      max_connections: "500"
+      shared_buffers: 4GB
+      effective_cache_size: 12GB
+      work_mem: 16MB
+      maintenance_work_mem: 256MB
+      wal_compression: "on"
+      wal_level: logical
+      max_wal_senders: "10"
+      log_statement: ddl
+      log_min_duration_statement: "1000"
+      synchronous_commit: on
+    pg_hba:
+      - "host all all 10.0.0.0/8 scram-sha-256"
+
+  bootstrap:
+    initdb:
+      database: verolas
+      owner: verolas_app
+      encoding: UTF8
+      localeCType: en_US.utf8
+      localeCollate: en_US.utf8
+      postInitTemplateSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector;
+        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        - CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+  storage:
+    storageClass: hcloud-volumes
+    size: 200Gi
+
+  walStorage:
+    storageClass: hcloud-volumes
+    size: 100Gi
+
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 16Gi
+
+  monitoring:
+    enablePodMonitor: true
+
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://verolas-pgbackup-prod/verolas-pg
+      endpointURL: https://fsn1.your-objectstorage.com
+      s3Credentials:
+        accessKeyId:
+          name: postgres-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: postgres-backup-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        encryption: AES256
+      data:
+        compression: gzip
+        encryption: AES256
+        immediateCheckpoint: false
+        jobs: 4
+    retentionPolicy: 90d
+
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution: {}
+
+  serviceAccountTemplate:
+    metadata:
+      annotations: {}
