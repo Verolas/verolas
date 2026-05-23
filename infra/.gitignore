@@ -1,5 +1,10 @@
 .terraform/
 .terraform.lock.hcl.bak
+
+# kube-hetzner writes the cluster admin kubeconfig next to the composition.
+# That file holds full cluster credentials; never commit.
+*_kubeconfig.yaml
+kubeconfig.yaml
 *.tfstate
 *.tfstate.backup
 *.tfstate.lock.info

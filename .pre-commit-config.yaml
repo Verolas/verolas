@@ -1,0 +1,37 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/tofuutils/pre-commit-opentofu
+    rev: v2.1.0
+    hooks:
+      - id: tofu_fmt
+
+  - repo: local
+    hooks:
+      - id: prose-dashes
+        name: No em dashes, en dashes, or double hyphens in prose
+        entry: scripts/check-prose-dashes.sh
+        language: system
+        pass_filenames: false
+
+      - id: no-phase
+        name: No "phase N" mentions in user-facing content
+        entry: scripts/check-no-phase.sh
+        language: system
+        pass_filenames: false

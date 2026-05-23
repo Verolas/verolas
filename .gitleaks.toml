@@ -1,0 +1,17 @@
+title = "gitleaks config for Verolas"
+
+# Use the default ruleset, then add an allowlist for known-false-positive paths.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths that intentionally contain example or placeholder credentials"
+paths = [
+  '''infra/live/.*/terraform\.tfvars\.example$''',
+  '''docs/decisions/.*\.md$''',
+]
+regexes = [
+  # Placeholder strings used in templates
+  '''REPLACE_WITH_[A-Z_]+''',
+  '''<[a-z\-]+-(token|key|secret|access-key|secret-key|account-id)>''',
+]

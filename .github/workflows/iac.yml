@@ -1,0 +1,66 @@
+name: iac
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/iac.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+
+concurrency:
+  group: iac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    name: tofu fmt check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.12.0
+
+      - name: tofu fmt -check -recursive
+        working-directory: infra
+        run: tofu fmt -check -recursive
+
+  validate:
+    name: tofu validate
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, staging, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.12.0
+
+      - name: Skip if env not yet wired
+        id: skip
+        working-directory: infra/live/${{ matrix.env }}
+        run: |
+          if ls *.tf >/dev/null 2>&1; then
+            echo "has_tf=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tf=false" >> "$GITHUB_OUTPUT"
+            echo "No .tf files in infra/live/${{ matrix.env }} yet, skipping."
+          fi
+
+      - name: tofu init without backend
+        if: steps.skip.outputs.has_tf == 'true'
+        working-directory: infra/live/${{ matrix.env }}
+        run: tofu init -backend=false -input=false
+
+      - name: tofu validate
+        if: steps.skip.outputs.has_tf == 'true'
+        working-directory: infra/live/${{ matrix.env }}
+        run: tofu validate -no-color

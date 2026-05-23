@@ -16,9 +16,9 @@ module "k8s" {
     hcloud = hcloud
   }
 
-  env          = local.env
-  hcloud_token = var.hcloud_token
-  region       = local.region
+  env            = local.env
+  hcloud_token   = var.hcloud_token
+  region         = local.region
   network_region = "eu-central"
 
   # Single node topology for early development. Scale up to 3 + 3 when product
