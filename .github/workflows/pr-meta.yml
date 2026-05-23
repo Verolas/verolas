@@ -1,0 +1,53 @@
+name: pr-meta
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  title:
+    name: Conventional Commits title
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            refactor
+            docs
+            test
+            infra
+            adr
+            ci
+            perf
+            build
+            style
+          requireScope: false
+          subjectPattern: ^[A-Za-z0-9].{1,100}$
+          subjectPatternError: |
+            The subject must start with a letter or digit and be 2 to 101 characters.
+
+  no-phase-in-pr:
+    name: No phase mentions in PR
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check title and body for forbidden phase references
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -e
+          combined="$PR_TITLE
+          $PR_BODY"
+          if echo "$combined" | grep -iE '\bphase[[:space:]]+[0-9]+\b' >/dev/null; then
+            echo "Forbidden: numbered build step or 'phase N' mention in PR title or body."
+            echo "Use the descriptive name of the work instead."
+            exit 1
+          fi

@@ -1,0 +1,132 @@
+name: image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  discover:
+    name: discover Dockerfiles
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+      has_images: ${{ steps.find.outputs.has_images }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find Dockerfiles in apps/ and services/
+        id: find
+        run: |
+          dockerfiles=$(find apps services -mindepth 2 -maxdepth 3 -name Dockerfile -type f 2>/dev/null | sort)
+          if [ -z "$dockerfiles" ]; then
+            echo "has_images=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfiles found, image pipeline will skip the build stage."
+            exit 0
+          fi
+          include="["
+          while IFS= read -r df; do
+            dir=$(dirname "$df")
+            name=$(basename "$dir")
+            include+="{\"context\":\"$dir\",\"dockerfile\":\"$df\",\"name\":\"$name\"},"
+          done <<< "$dockerfiles"
+          include="${include%,}]"
+          echo "has_images=true" >> "$GITHUB_OUTPUT"
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+          echo "Discovered images:"
+          echo "$include"
+
+  build:
+    name: build, scan, sign ${{ matrix.name }}
+    needs: discover
+    if: needs.discover.outputs.has_images == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for ${{ matrix.name }}
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          tags: |
+            type=sha,prefix=,format=long
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push ${{ matrix.name }}
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan ${{ matrix.name }}
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          vuln-type: os,library
+
+      - name: Upload Trivy SARIF
+        if: github.event_name != 'pull_request' && always() && hashFiles(format('trivy-{0}.sarif', matrix.name)) != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: v2.4.1
+
+      - name: Sign image with Cosign keyless
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGES: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -e
+          for tag in $IMAGES; do
+            cosign sign --yes "${tag}@${DIGEST}"
+          done

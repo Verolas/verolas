@@ -1,0 +1,31 @@
+replicaCount: 1
+
+image:
+  pullPolicy: IfNotPresent
+
+flags:
+  logLevel: info
+  logFormat: json
+
+metrics:
+  controllerManagerAddr: ':8080'
+  listenerAddr: ':8080'
+  listenerEndpoint: /metrics
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+priorityClassName: system-cluster-critical
+
+# Watch all namespaces by default. Restrict via watchSingleNamespace once
+# multi tenant patterns settle.
+# watchSingleNamespace: arc-runners
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
