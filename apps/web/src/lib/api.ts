@@ -97,6 +97,8 @@ export interface OnboardingPayload {
   primary_discipline: Discipline;
   first_project_name: string;
   full_name?: string;
+  region: string;
+  locale: string;
 }
 
 export interface OnboardingResult {
@@ -104,6 +106,8 @@ export interface OnboardingResult {
   organization_id: string;
   organization_slug: string;
   organization_name: string;
+  organization_region: string;
+  organization_locale: string;
   project_id: string;
   project_name: string;
   discipline: Discipline;

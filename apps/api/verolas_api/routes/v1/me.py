@@ -26,6 +26,8 @@ class MembershipSummary(BaseModel):
     organization_slug: str
     organization_name: str
     organization_status: OrganizationStatus
+    organization_locale: str
+    organization_region: str
     role: MembershipRole
 
 
@@ -39,6 +41,7 @@ class MeOut(BaseModel):
     email: EmailStr | None
     name: str | None
     memberships: list[MembershipSummary]
+    locale_override: str | None
     created_at: datetime | None
 
 
@@ -60,6 +63,7 @@ async def get_me(conn: BootstrapConn, auth: CurrentAuth) -> MeOut:
             email=auth.claims.email or None,
             name=None,
             memberships=[],
+            locale_override=None,
             created_at=None,
         )
 
@@ -70,6 +74,8 @@ async def get_me(conn: BootstrapConn, auth: CurrentAuth) -> MeOut:
             organization_slug=m["organization_slug"],
             organization_name=m["organization_name"],
             organization_status=OrganizationStatus(m["organization_status"]),
+            organization_locale=m.get("organization_locale") or "en-US",
+            organization_region=m.get("organization_region") or "us",
             role=MembershipRole(m["role"]),
         )
         for m in payload.get("memberships", [])
@@ -80,6 +86,7 @@ async def get_me(conn: BootstrapConn, auth: CurrentAuth) -> MeOut:
         email=user.get("email") or auth.claims.email or None,
         name=user.get("name"),
         memberships=memberships,
+        locale_override=payload.get("locale_override"),
         created_at=user.get("created_at"),
     )
 

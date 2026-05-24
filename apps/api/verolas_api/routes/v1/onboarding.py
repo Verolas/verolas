@@ -26,6 +26,33 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 _SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
 
 
+VALID_REGIONS = {
+    "de",
+    "ch",
+    "at",
+    "fr",
+    "nl",
+    "be",
+    "uk",
+    "us",
+    "au",
+    "ca",
+}
+
+VALID_LOCALES = {
+    "de-DE",
+    "de-CH",
+    "de-AT",
+    "fr-FR",
+    "nl-NL",
+    "nl-BE",
+    "en-US",
+    "en-GB",
+    "en-AU",
+    "en-CA",
+}
+
+
 class OnboardingBody(BaseModel):
     """Three-step wizard payload, posted in one shot after the last step."""
 
@@ -36,6 +63,8 @@ class OnboardingBody(BaseModel):
     primary_discipline: Discipline
     first_project_name: str = Field(min_length=1, max_length=200)
     full_name: str | None = Field(default=None, max_length=120)
+    region: str = Field(default="us", description="Two-letter region code")
+    locale: str = Field(default="en-US", description="BCP-47 locale tag")
 
 
 class OnboardingResult(BaseModel):
@@ -47,6 +76,8 @@ class OnboardingResult(BaseModel):
     organization_id: UUID
     organization_slug: str
     organization_name: str
+    organization_region: str
+    organization_locale: str
     project_id: UUID
     project_name: str
     discipline: Discipline
@@ -73,12 +104,23 @@ async def onboard(
 
     _validate_subject_uuid(auth.claims.keycloak_subject)
 
+    if body.region not in VALID_REGIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown region '{body.region}'.",
+        )
+    if body.locale not in VALID_LOCALES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown locale '{body.locale}'.",
+        )
+
     email = auth.claims.email or ""
     display_name = body.full_name or _name_from_email(email)
 
     try:
         cur = await conn.execute(
-            "SELECT app.onboard_account(%s, %s, %s, %s, %s, %s, %s)",
+            "SELECT app.onboard_account(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 auth.claims.keycloak_subject,
                 email,
@@ -87,6 +129,8 @@ async def onboard(
                 slug,
                 body.primary_discipline.value,
                 body.first_project_name,
+                body.region,
+                body.locale,
             ),
         )
     except psycopg.errors.UniqueViolation as exc:
@@ -108,6 +152,8 @@ async def onboard(
         organization_id=payload["organization_id"],
         organization_slug=payload["organization_slug"],
         organization_name=payload["organization_name"],
+        organization_region=payload["organization_region"],
+        organization_locale=payload["organization_locale"],
         project_id=payload["project_id"],
         project_name=payload["project_name"],
         discipline=Discipline(payload["discipline"]),

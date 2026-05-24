@@ -6,6 +6,7 @@
  */
 
 import type { Discipline } from "./api";
+import type { Region, Locale } from "./locales";
 
 const KEY = "verolas_onboarding_draft";
 
@@ -15,6 +16,8 @@ export interface OnboardingDraft {
   primary_discipline?: Discipline;
   first_project_name?: string;
   full_name?: string;
+  region?: Region;
+  locale?: Locale;
 }
 
 export function readDraft(): OnboardingDraft {

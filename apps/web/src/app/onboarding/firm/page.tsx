@@ -7,6 +7,12 @@ import { OnboardingShell } from "@/components/onboarding-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  REGIONS,
+  defaultRegionFromBrowser,
+  metaForRegion,
+  type Region,
+} from "@/lib/locales";
 import { readDraft, slugifyOrgName, writeDraft } from "@/lib/onboarding-store";
 
 export default function OnboardingFirmPage() {
@@ -15,6 +21,7 @@ export default function OnboardingFirmPage() {
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [fullName, setFullName] = useState("");
+  const [region, setRegion] = useState<Region>("us");
 
   useEffect(() => {
     const draft = readDraft();
@@ -24,6 +31,7 @@ export default function OnboardingFirmPage() {
       setSlugTouched(true);
     }
     if (draft.full_name) setFullName(draft.full_name);
+    setRegion(draft.region ?? defaultRegionFromBrowser());
   }, []);
 
   function handleNameChange(value: string): void {
@@ -33,21 +41,26 @@ export default function OnboardingFirmPage() {
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    const meta = metaForRegion(region);
     const patch: Parameters<typeof writeDraft>[0] = {
       organization_name: name.trim(),
       organization_slug: slug.trim(),
+      region,
     };
+    if (meta) patch.locale = meta.locale;
     const trimmedFullName = fullName.trim();
     if (trimmedFullName) patch.full_name = trimmedFullName;
     writeDraft(patch);
     router.push("/onboarding/discipline");
   }
 
+  const activeMeta = metaForRegion(region);
+
   return (
     <OnboardingShell
       step={1}
       title="Set up your firm"
-      description="Workspaces are scoped to an engineering firm. You can rename or add more later."
+      description="Workspaces are scoped to an engineering firm. The region you pick drives the code set, units, fee schedule, and permit format."
     >
       <form className="space-y-5" onSubmit={handleSubmit} aria-label="Firm details form">
         <div className="space-y-2">
@@ -60,6 +73,45 @@ export default function OnboardingFirmPage() {
             placeholder="Kafle Engineering GmbH"
           />
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="region">Region</Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {REGIONS.map((r) => {
+              const selected = r.region === region;
+              return (
+                <button
+                  key={r.region}
+                  type="button"
+                  onClick={() => setRegion(r.region)}
+                  aria-pressed={selected}
+                  className={`flex items-start gap-3 rounded-md border p-3 text-left text-sm transition-colors ${
+                    selected
+                      ? "border-primary bg-brand-50 dark:bg-accent"
+                      : "border-border hover:bg-surface-hover"
+                  }`}
+                >
+                  <span aria-hidden="true" className="text-lg leading-none">
+                    {r.flag}
+                  </span>
+                  <span className="flex-1">
+                    <span className="block font-medium text-foreground">{r.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      {r.codeSet}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {activeMeta && (
+            <p className="text-[11px] text-muted-foreground">
+              Locale {activeMeta.locale} · {activeMeta.units} · {activeMeta.feeSchedule} ·
+              permits via {activeMeta.permitAuthority}
+            </p>
+          )}
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="orgSlug">Workspace URL</Label>
           <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3">
