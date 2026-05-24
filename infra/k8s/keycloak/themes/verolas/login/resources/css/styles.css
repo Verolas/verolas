@@ -1,0 +1,339 @@
+/*
+ * Verolas branded auth theme. Extends keycloak.v2 (PatternFly).
+ * Overrides the PatternFly variables Keycloak uses on the login pages,
+ * then ships a handful of structural tweaks so the page reads like a
+ * product surface and not an admin tool.
+ */
+
+:root {
+  --verolas-deep: #122c5c;
+  --verolas-mid: #1a3d80;
+  --verolas-bright: #2c5cb0;
+  --verolas-soft: #e6ecf7;
+  --verolas-ink: #1a1f2e;
+  --verolas-muted: #6a7385;
+  --verolas-border: #d6dde9;
+  --verolas-surface: #ffffff;
+  --verolas-bg: #f6f8fc;
+  --verolas-danger: #b91c1c;
+  --verolas-radius: 10px;
+  --verolas-shadow: 0 8px 28px rgba(18, 44, 92, 0.08);
+
+  /* PatternFly hooks Keycloak's v2 theme reads. */
+  --pf-v5-global--primary-color--100: var(--verolas-mid);
+  --pf-v5-global--primary-color--200: var(--verolas-deep);
+  --pf-v5-global--link--Color: var(--verolas-mid);
+  --pf-v5-global--link--Color--hover: var(--verolas-deep);
+  --pf-v5-global--BackgroundColor--100: var(--verolas-surface);
+  --pf-v5-global--BorderColor--100: var(--verolas-border);
+  --pf-v5-global--Color--100: var(--verolas-ink);
+  --pf-v5-global--Color--200: var(--verolas-muted);
+  --pf-v5-global--FontFamily--text: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pf-v5-global--FontFamily--heading: "IBM Plex Sans", system-ui, sans-serif;
+  --pf-v5-global--FontFamily--monospace: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(120% 80% at 100% 0%, #d8e2f3 0%, transparent 60%),
+    radial-gradient(80% 70% at 0% 100%, #c9d4ec 0%, transparent 55%),
+    var(--verolas-bg);
+  font-family: var(--pf-v5-global--FontFamily--text);
+  color: var(--verolas-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.login-pf-page,
+.login-pf,
+.login-pf body {
+  background: transparent !important;
+}
+
+.login-pf-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+#kc-header {
+  display: none !important;
+}
+
+.login-pf-page .card-pf {
+  background: var(--verolas-surface);
+  border: 1px solid var(--verolas-border);
+  border-radius: var(--verolas-radius);
+  box-shadow: var(--verolas-shadow);
+  padding: 36px 32px 32px;
+  width: min(100%, 440px);
+  margin: 0;
+}
+
+#kc-content {
+  width: 100%;
+}
+
+.verolas-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.verolas-brand img {
+  height: 28px;
+  width: auto;
+}
+
+#kc-page-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+  color: var(--verolas-ink);
+  text-align: left;
+}
+
+.verolas-subtitle {
+  font-size: 14px;
+  color: var(--verolas-muted);
+  margin: 0 0 24px;
+  text-align: left;
+}
+
+.pf-v5-c-form__label,
+.control-label,
+label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--verolas-ink);
+  margin-bottom: 4px;
+}
+
+.pf-v5-c-form-control,
+.pf-c-form-control,
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  height: 42px;
+  font-size: 14px;
+  border: 1px solid var(--verolas-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--verolas-surface);
+  color: var(--verolas-ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pf-v5-c-form-control:focus,
+.pf-c-form-control:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus {
+  outline: none;
+  border-color: var(--verolas-mid);
+  box-shadow: 0 0 0 3px rgba(26, 61, 128, 0.18);
+}
+
+.pf-v5-c-button,
+.pf-c-button,
+input[type="submit"],
+button[type="submit"] {
+  height: 42px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 8px;
+  padding: 0 16px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.pf-v5-c-button.pf-m-primary,
+.pf-c-button.pf-m-primary,
+#kc-login,
+input[type="submit"].btn-primary,
+button[type="submit"].btn-primary {
+  background: var(--verolas-mid);
+  border: 1px solid var(--verolas-mid);
+  color: #fff;
+  width: 100%;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background: var(--verolas-deep);
+  border-color: var(--verolas-deep);
+  color: #fff;
+}
+
+.pf-v5-c-button.pf-m-secondary,
+.pf-c-button.pf-m-secondary,
+.btn-default {
+  background: var(--verolas-surface);
+  border: 1px solid var(--verolas-border);
+  color: var(--verolas-ink);
+}
+
+.pf-v5-c-button.pf-m-secondary:hover,
+.pf-c-button.pf-m-secondary:hover {
+  background: var(--verolas-soft);
+  border-color: var(--verolas-bright);
+  color: var(--verolas-deep);
+}
+
+#kc-form-options,
+#kc-form-buttons {
+  margin-top: 16px;
+}
+
+#kc-form-options .checkbox label,
+.checkbox label {
+  font-size: 13px;
+  color: var(--verolas-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#kc-info,
+#kc-registration,
+.kc-info {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--verolas-muted);
+}
+
+#kc-info a,
+#kc-registration a,
+.kc-info a,
+a {
+  color: var(--verolas-mid);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+#kc-info a:hover,
+a:hover {
+  color: var(--verolas-deep);
+  text-decoration: underline;
+}
+
+.kc-feedback-text,
+.alert,
+.alert-error,
+.pf-v5-c-alert {
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.alert-error,
+.pf-v5-c-alert.pf-m-danger {
+  background: #fdecec;
+  border: 1px solid #f5c2c2;
+  color: var(--verolas-danger);
+  padding: 12px 14px;
+}
+
+#kc-social-providers {
+  margin-top: 20px;
+}
+
+#kc-social-providers > h2,
+#kc-social-providers > h4 {
+  display: none;
+}
+
+#kc-social-providers ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+#kc-social-providers li {
+  margin: 0;
+}
+
+#kc-social-providers a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--verolas-ink);
+  background: var(--verolas-surface);
+  border: 1px solid var(--verolas-border);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+#kc-social-providers a:hover {
+  background: var(--verolas-soft);
+  border-color: var(--verolas-bright);
+  color: var(--verolas-deep);
+}
+
+.kc-social-icon-text,
+.kc-social-provider-name {
+  font-weight: 500;
+}
+
+.verolas-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--verolas-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 20px 0;
+}
+
+.verolas-divider::before,
+.verolas-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--verolas-border);
+}
+
+.verolas-footer {
+  margin-top: 28px;
+  font-size: 12px;
+  color: var(--verolas-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.verolas-footer a {
+  color: var(--verolas-muted);
+}
+
+.verolas-footer a:hover {
+  color: var(--verolas-ink);
+}
+
+/* Hide Keycloak's stock branding bits we replaced. */
+#kc-header-wrapper {
+  display: none !important;
+}
+
+.login-pf-brand,
+.pf-v5-c-login__main-header-desc {
+  display: none !important;
+}
