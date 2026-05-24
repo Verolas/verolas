@@ -321,6 +321,18 @@ export const connectorsApi = {
       `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/connectors/bindings/${bindingId}`,
       { method: "DELETE" },
     ),
+  oauthStart: (slug: string, classId: string, redirectAfter: string) =>
+    request<{ authorize_url: string; state: string }>(
+      `/v1/orgs/${encodeURIComponent(slug)}/connectors/oauth/start`,
+      {
+        method: "POST",
+        body: JSON.stringify({ class_id: classId, redirect_after: redirectAfter }),
+      },
+    ),
+  listInstances: (slug: string, classId: string) =>
+    request<{ ref: string; label: string; hint: string | null }[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/connectors/${encodeURIComponent(classId)}/instances`,
+    ),
 };
 
 export type ProjectFileKind =
