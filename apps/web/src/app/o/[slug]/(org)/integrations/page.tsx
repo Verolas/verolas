@@ -110,9 +110,19 @@ export default function IntegrationsPage() {
       try {
         if (cls.tier === "C") {
           await connectorsApi.waitlist(slug, cls.id);
-        } else {
-          await connectorsApi.install(slug, cls.id);
+          await refresh();
+          return;
         }
+        if (cls.auth_method === "oauth2_pkce") {
+          const redirectAfter =
+            typeof window !== "undefined" ? window.location.href : "/";
+          const start = await connectorsApi.oauthStart(slug, cls.id, redirectAfter);
+          if (typeof window !== "undefined") {
+            window.location.href = start.authorize_url;
+          }
+          return;
+        }
+        await connectorsApi.install(slug, cls.id);
         await refresh();
       } catch (err) {
         setError(err instanceof ApiError ? err.detail : String(err));
