@@ -4,6 +4,7 @@ import {
   BarChart3,
   BookOpen,
   FolderKanban,
+  Library as LibraryIcon,
   LayoutGrid,
   Receipt,
   Settings,
@@ -44,6 +45,12 @@ export function OrgShell({ slug, children }: Props) {
       label: "Team",
       href: `/o/${slug}/team`,
       icon: <Users className="size-4" aria-hidden="true" />,
+    },
+    {
+      key: "library",
+      label: "Library",
+      href: `/o/${slug}/library`,
+      icon: <LibraryIcon className="size-4" aria-hidden="true" />,
     },
     {
       key: "integrations",
