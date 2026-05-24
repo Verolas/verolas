@@ -348,7 +348,11 @@ CONNECTORS: dict[str, ConnectorClass] = {
             auth_method="oauth2_pkce",
             blurb="Post run summaries and review threads to a Teams channel.",
             region_tags=_ALL_REGIONS,
-            scopes=("ChannelMessage.Send", "Channel.ReadBasic.All"),
+            scopes=(
+                "Team.ReadBasic.All",
+                "Channel.ReadBasic.All",
+                "ChannelMessage.Send",
+            ),
             instance_label="Teams team / channel",
         ),
         ConnectorClass(
