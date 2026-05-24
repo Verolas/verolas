@@ -8,55 +8,83 @@ import {
   FileText,
   GitBranch,
   History,
+  Loader2,
   MapPin,
+  Play,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, orgsApi, type Project } from "@/lib/api";
+import { RunLauncher } from "@/components/run-launcher";
+import {
+  type AgentRun,
+  type AgentRunStatus,
+  ApiError,
+  orgsApi,
+  type Project,
+  runsApi,
+} from "@/lib/api";
 
 interface Props {
   params: Promise<{ slug: string; projectId: string }>;
 }
 
+const STATUS_TONE: Record<AgentRunStatus, string> = {
+  queued: "text-muted-foreground",
+  running: "text-primary",
+  blocked: "text-warning",
+  completed: "text-success",
+  failed: "text-destructive",
+  cancelled: "text-muted-foreground",
+};
+
 export default function ProjectOverviewPage({ params }: Props) {
   const [resolved, setResolved] = useState<{ slug: string; projectId: string } | null>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [runs, setRuns] = useState<AgentRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void params.then(setResolved);
   }, [params]);
 
-  useEffect(() => {
+  const refresh = useCallback(async (): Promise<void> => {
     if (!resolved) return;
-    let cancelled = false;
-    async function load(): Promise<void> {
-      try {
-        const list = await orgsApi.listProjects(resolved!.slug);
-        if (cancelled) return;
-        const match = list.find((p) => p.id === resolved!.projectId) ?? null;
-        setProject(match);
-        if (!match) setError("Project not found.");
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof ApiError ? err.detail : String(err));
-      }
+    try {
+      const [list, runList] = await Promise.all([
+        orgsApi.listProjects(resolved.slug),
+        runsApi.list(resolved.slug, resolved.projectId),
+      ]);
+      const match = list.find((p) => p.id === resolved.projectId) ?? null;
+      setProject(match);
+      setRuns(runList);
+      if (!match) setError("Project not found.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : String(err));
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [resolved]);
 
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const active = (runs ?? []).filter(
+    (r) => r.status === "queued" || r.status === "running" || r.status === "blocked",
+  );
+  const recent = (runs ?? [])
+    .filter((r) => r.status === "completed" || r.status === "failed" || r.status === "cancelled")
+    .slice(0, 5);
+
   return (
-    <div className="mx-auto w-full max-w-6xl px-8 py-8 space-y-8">
-      <header className="space-y-3">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-8 py-8">
+      <header className="space-y-2">
         <h1 className="text-3xl font-normal tracking-tight text-foreground">
           {project?.name ?? "Loading..."}
         </h1>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="font-mono text-xs">
-            verolas.com/o/{resolved?.slug ?? "..."}/projects/{resolved?.projectId.slice(0, 12) ?? "..."}
+            verolas.com/o/{resolved?.slug ?? "..."}/projects/
+            {resolved?.projectId.slice(0, 12) ?? "..."}
           </span>
           <button
             type="button"
@@ -78,109 +106,167 @@ export default function ProjectOverviewPage({ params }: Props) {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
-        <div className="space-y-3">
-          <Stat icon={Activity} label="Status" value="Healthy" valueTone="success" />
-          <Stat icon={Cog} label="Compute tier" value="Starter" badge="nano" />
-          <Stat
-            icon={GitBranch}
-            label="Source repo"
-            value={project ? "No repository connected" : "—"}
-            valueTone="muted"
-          />
-          <Stat icon={FileText} label="Active workspace" value="main" />
-          <Stat icon={History} label="Last reviewer pass" value="No runs yet" valueTone="muted" />
-          <Stat icon={ClipboardCheck} label="Last backup" value="No snapshots" valueTone="muted" />
-        </div>
-        <div className="relative overflow-hidden rounded-md border border-border bg-surface p-4">
-          <div className="grid h-full place-items-center">
-            <div className="rounded-md border border-border bg-background p-3 text-center shadow-xs">
-              <div className="flex items-center gap-2">
-                <MapPin className="size-4 text-primary" aria-hidden="true" />
-                <span className="font-medium text-foreground">Primary region</span>
-              </div>
-              <div className="mt-1 text-sm text-foreground-light">EU Central (Frankfurt)</div>
-              <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
-                <span>CPU 3%</span>
-                <span>Disk 4%</span>
-                <span>RAM 46%</span>
-              </div>
+      {resolved && (
+        <RunLauncher
+          orgSlug={resolved.slug}
+          projectId={resolved.projectId}
+          onRunCreated={() => void refresh()}
+        />
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+        <section className="rounded-md border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Play className="size-4 text-primary" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">
+                Active runs <span className="text-muted-foreground">({active.length})</span>
+              </h2>
             </div>
+            {resolved && (
+              <Link
+                href={`/o/${resolved.slug}/projects/${resolved.projectId}/runs`}
+                className="text-xs text-primary hover:underline"
+                prefetch={false}
+              >
+                View all →
+              </Link>
+            )}
           </div>
-          <div
-            className="absolute inset-0 -z-0 opacity-30"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 1px 1px, var(--color-border) 1px, transparent 0)",
-              backgroundSize: "10px 10px",
-            }}
-            aria-hidden="true"
-          />
-        </div>
+          {runs === null ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">Loading runs...</div>
+          ) : active.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No runs in flight. Launch one above.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {active.map((run) => (
+                <li key={run.id}>
+                  {resolved && (
+                    <Link
+                      href={`/o/${resolved.slug}/projects/${resolved.projectId}/runs/${run.id}`}
+                      className="flex items-start gap-3 py-3 hover:bg-surface-hover"
+                      prefetch={false}
+                    >
+                      <Loader2
+                        className={`mt-0.5 size-4 animate-spin ${STATUS_TONE[run.status]}`}
+                        aria-hidden="true"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-foreground">
+                          {run.agent_name}
+                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                            T{run.tier}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {run.brief}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>
+                            Step {run.current_step + 1}/{Math.max(run.plan.length, 1)}
+                          </span>
+                          <span>·</span>
+                          <span>{run.progress_percent}%</span>
+                          <span>·</span>
+                          <span className={STATUS_TONE[run.status]}>{run.status}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-md border border-border bg-surface p-5">
+          <h2 className="text-sm font-semibold text-foreground">Health</h2>
+          <ul className="mt-3 space-y-3 text-sm">
+            <HealthRow icon={Activity} label="Status" value="Healthy" tone="success" />
+            <HealthRow icon={ClipboardCheck} label="Reviewer status" value="1 pending" />
+            <HealthRow icon={GitBranch} label="Active workspace" value="main" />
+            <HealthRow icon={Cog} label="Compute tier" value="Starter (nano)" />
+            <HealthRow icon={FileText} label="Source repo" value="Not connected" tone="muted" />
+          </ul>
+        </section>
       </div>
 
-      <div>
-        <h2 className="mb-3 text-lg font-medium text-foreground">
-          0 Total events
-          <span className="ml-2 font-normal text-sm text-muted-foreground">
-            in the last 60 minutes
-          </span>
+      <section className="rounded-md border border-border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-foreground">
+          Recent runs
+          <span className="ml-2 font-normal text-muted-foreground">last finished</span>
         </h2>
-        <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-4">
-          {[
-            { label: "Reviewer findings", value: 0 },
-            { label: "Drawing uploads", value: 0 },
-            { label: "Calc runs", value: 0 },
-            { label: "Document edits", value: 0 },
-          ].map((card) => (
-            <div key={card.label} className="bg-surface px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {card.label}
-              </div>
-              <div className="mt-1 text-2xl font-medium text-foreground">{card.value}</div>
-            </div>
-          ))}
+        {recent.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Completed runs land here with the producing agent, brief, and result summary.
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-border">
+            {recent.map((run) => (
+              <li key={run.id} className="flex items-start gap-3 py-3">
+                <History className="mt-0.5 size-3.5 text-muted-foreground" aria-hidden="true" />
+                <div className="flex-1">
+                  <div className="text-sm text-foreground">
+                    <span className="font-medium">{run.agent_name}</span>{" "}
+                    <span className={STATUS_TONE[run.status]}>{run.status}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">{run.brief}</div>
+                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    {new Date(run.updated_at).toLocaleString()}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-md border border-border bg-surface p-5">
+        <div className="flex items-center gap-2">
+          <MapPin className="size-4 text-primary" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-foreground">Primary region</h2>
         </div>
-      </div>
+        <p className="mt-1 text-sm text-foreground-light">EU Central (Frankfurt)</p>
+        <div className="mt-3 grid grid-cols-3 gap-3 text-[11px] text-muted-foreground">
+          <span>CPU 3%</span>
+          <span>Disk 4%</span>
+          <span>RAM 46%</span>
+        </div>
+      </section>
     </div>
   );
 }
 
-function Stat({
+function HealthRow({
   icon: Icon,
   label,
   value,
-  valueTone,
-  badge,
+  tone,
 }: {
   icon: typeof Activity;
   label: string;
   value: string;
-  valueTone?: "muted" | "success";
-  badge?: string;
+  tone?: "muted" | "success";
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3">
-      <span className="grid size-8 place-items-center rounded-md border border-border bg-muted text-muted-foreground">
-        <Icon className="size-4" aria-hidden="true" />
+    <li className="flex items-start justify-between gap-3">
+      <span className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="size-3.5" aria-hidden="true" />
+        {label}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </div>
-        <div
-          className={`mt-0.5 truncate text-sm ${
-            valueTone === "muted"
-              ? "text-muted-foreground"
-              : valueTone === "success"
-                ? "text-success"
-                : "text-foreground"
-          }`}
-        >
-          {value}
-        </div>
-      </div>
-      {badge && <span className="badge">{badge}</span>}
-    </div>
+      <span
+        className={
+          tone === "muted"
+            ? "text-muted-foreground"
+            : tone === "success"
+              ? "text-success"
+              : "text-foreground"
+        }
+      >
+        {value}
+      </span>
+    </li>
   );
 }

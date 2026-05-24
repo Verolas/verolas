@@ -109,6 +109,52 @@ export interface OnboardingResult {
   discipline: Discipline;
 }
 
+export type AgentRunStatus =
+  | "queued"
+  | "running"
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "cancelled";
+export type AgentRunTrigger = "manual" | "schedule" | "event";
+
+export interface AgentRunPlanStep {
+  label: string;
+  status: string;
+  detail?: string;
+}
+
+export interface AgentRun {
+  id: string;
+  project_id: string;
+  org_id: string;
+  agent_id: string;
+  agent_name: string;
+  tier: number;
+  status: AgentRunStatus;
+  trigger: AgentRunTrigger;
+  triggered_by_user_id: string | null;
+  brief: string;
+  plan: AgentRunPlanStep[];
+  current_step: number;
+  progress_percent: number;
+  result: Record<string, unknown>;
+  cost_micro_usd: number;
+  queued_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentSummary {
+  id: string;
+  name: string;
+  tier: number;
+  blurb: string;
+  region_tags: string[];
+}
+
 export const meApi = {
   get: () => request<Me>("/v1/me/"),
 };
@@ -129,4 +175,25 @@ export const orgsApi = {
       method: "POST",
       body: JSON.stringify({ name, discipline }),
     }),
+  listAgents: (slug: string) =>
+    request<AgentSummary[]>(`/v1/orgs/${encodeURIComponent(slug)}/agents/`),
+};
+
+export const runsApi = {
+  list: (slug: string, projectId: string) =>
+    request<AgentRun[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/runs/`,
+    ),
+  get: (slug: string, projectId: string, runId: string) =>
+    request<AgentRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/runs/${runId}`,
+    ),
+  create: (slug: string, projectId: string, agentId: string, brief: string) =>
+    request<AgentRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/runs/`,
+      {
+        method: "POST",
+        body: JSON.stringify({ agent_id: agentId, brief }),
+      },
+    ),
 };
