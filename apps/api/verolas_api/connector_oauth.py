@@ -14,21 +14,28 @@ Only Tier A connectors live here. Tier B (vendor SDK) and Tier C
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
 class ConnectorOAuthConfig:
-    """Static OAuth 2 PKCE recipe for one connector class."""
+    """Static OAuth 2 PKCE recipe for one connector class.
+
+    `extra_authorize_params` lets each vendor inject the niceties their
+    OAuth dialect requires. Microsoft wants `prompt=consent` so re-installs
+    refresh granted scopes; Google needs `access_type=offline` + the same
+    prompt to mint a refresh_token; Autodesk only accepts
+    `prompt=login|none|create` so we send `login`. Picking the right
+    nudge per vendor avoids `invalid_request` 400s at the consent page.
+    """
 
     class_id: str
     authorize_url: str
     token_url: str
     client_id_env: str
     client_secret_env: str
-    # Some vendors send an account discovery URL alongside the token.
-    # We persist whatever the token endpoint hands back into oauth_account.
     audience: str | None = None
+    extra_authorize_params: dict[str, str] = field(default_factory=dict)
 
 
 OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
@@ -40,6 +47,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://developer.api.autodesk.com/authentication/v2/token",
             client_id_env="AUTODESK_APS_CLIENT_ID",
             client_secret_env="AUTODESK_APS_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "login"},
         ),
         ConnectorOAuthConfig(
             class_id="ms-sharepoint",
@@ -47,6 +55,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
             client_id_env="MICROSOFT_GRAPH_CLIENT_ID",
             client_secret_env="MICROSOFT_GRAPH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent"},
         ),
         ConnectorOAuthConfig(
             class_id="ms-onedrive",
@@ -54,6 +63,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
             client_id_env="MICROSOFT_GRAPH_CLIENT_ID",
             client_secret_env="MICROSOFT_GRAPH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent"},
         ),
         ConnectorOAuthConfig(
             class_id="ms-teams",
@@ -61,6 +71,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
             client_id_env="MICROSOFT_GRAPH_CLIENT_ID",
             client_secret_env="MICROSOFT_GRAPH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent"},
         ),
         ConnectorOAuthConfig(
             class_id="ms-outlook",
@@ -68,6 +79,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
             client_id_env="MICROSOFT_GRAPH_CLIENT_ID",
             client_secret_env="MICROSOFT_GRAPH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent"},
         ),
         ConnectorOAuthConfig(
             class_id="ms-excel",
@@ -75,6 +87,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
             client_id_env="MICROSOFT_GRAPH_CLIENT_ID",
             client_secret_env="MICROSOFT_GRAPH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent"},
         ),
         ConnectorOAuthConfig(
             class_id="google-drive",
@@ -82,6 +95,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://oauth2.googleapis.com/token",
             client_id_env="GOOGLE_OAUTH_CLIENT_ID",
             client_secret_env="GOOGLE_OAUTH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent", "access_type": "offline"},
         ),
         ConnectorOAuthConfig(
             class_id="google-sheets",
@@ -89,6 +103,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://oauth2.googleapis.com/token",
             client_id_env="GOOGLE_OAUTH_CLIENT_ID",
             client_secret_env="GOOGLE_OAUTH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent", "access_type": "offline"},
         ),
         ConnectorOAuthConfig(
             class_id="gmail",
@@ -96,6 +111,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://oauth2.googleapis.com/token",
             client_id_env="GOOGLE_OAUTH_CLIENT_ID",
             client_secret_env="GOOGLE_OAUTH_CLIENT_SECRET",
+            extra_authorize_params={"prompt": "consent", "access_type": "offline"},
         ),
         ConnectorOAuthConfig(
             class_id="slack",
