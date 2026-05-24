@@ -12,6 +12,9 @@ interface Props {
   rail: ReactNode;
   /** The page content. */
   children: ReactNode;
+  /** Where the corner logo links to. Defaults to /projects which resolves
+   * to the caller's first org once their /v1/me has loaded. */
+  homeHref?: string;
 }
 
 /**
@@ -28,12 +31,12 @@ interface Props {
  * The logo cell and rail share a left column at 48px; the top bar and
  * content share the right column. Borders meet flush at the corner.
  */
-export function ShellFrame({ topBar, rail, children }: Props) {
+export function ShellFrame({ topBar, rail, children, homeHref = "/projects" }: Props) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <div className="sticky top-0 z-30 flex h-12 shrink-0 bg-surface">
         <Link
-          href="/"
+          href={homeHref}
           className="flex w-12 shrink-0 items-center justify-center border-b border-r border-border"
           aria-label="Home"
         >

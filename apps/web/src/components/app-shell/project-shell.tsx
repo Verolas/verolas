@@ -72,6 +72,7 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
   return (
     <ProtectedRoute>
       <ShellFrame
+        homeHref={`/o/${slug}/projects`}
         topBar={
           <TopBar
             orgSlug={slug}
