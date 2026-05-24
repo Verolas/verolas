@@ -115,11 +115,18 @@ label {
   margin-bottom: 4px;
 }
 
-.pf-v5-c-form-control,
-.pf-c-form-control,
+/* PatternFly form-control is a wrapper div around the input on some pages
+ * (user profile / register) and is the input itself on others (login).
+ * Style the actual input and reset the wrapper so we never see two boxes. */
 input[type="text"],
 input[type="email"],
-input[type="password"] {
+input[type="password"],
+input[type="tel"],
+input[type="number"],
+input[type="url"],
+input[type="search"],
+textarea,
+select {
   height: 42px;
   font-size: 14px;
   border: 1px solid var(--verolas-border);
@@ -130,16 +137,38 @@ input[type="password"] {
   transition: border-color 0.15s, box-shadow 0.15s;
   width: 100%;
   box-sizing: border-box;
+  font-family: inherit;
 }
 
-.pf-v5-c-form-control:focus,
-.pf-c-form-control:focus,
-input[type="text"]:focus,
-input[type="email"]:focus,
-input[type="password"]:focus {
+textarea {
+  height: auto;
+  min-height: 96px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: var(--verolas-mid);
   box-shadow: 0 0 0 3px rgba(26, 61, 128, 0.18);
+}
+
+/* PatternFly form-control wrapper: when it wraps an input, neutralise it
+ * so only the inner control shows. When it IS the input (.pf-v5-c-form-control
+ * applied directly to the <input> on classic login), the input rules above
+ * still match because the element is an <input>. */
+div.pf-v5-c-form-control,
+div.pf-c-form-control,
+.pf-v5-c-form-control__group,
+.pf-v5-c-form__group-control {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  height: auto !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .pf-v5-c-button,
