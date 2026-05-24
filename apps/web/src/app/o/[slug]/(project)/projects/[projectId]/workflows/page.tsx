@@ -24,7 +24,7 @@ const TIER_TONE: Record<number, string> = {
   4: "border-discipline-review/40 text-discipline-review",
 };
 
-export default function AgentsPage({ params }: Props) {
+export default function WorkflowsPage({ params }: Props) {
   const [resolved, setResolved] = useState<{ slug: string; projectId: string } | null>(null);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +61,11 @@ export default function AgentsPage({ params }: Props) {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-8 py-8">
       <header>
-        <h1 className="text-2xl font-normal tracking-tight text-foreground">Agents</h1>
+        <h1 className="text-2xl font-normal tracking-tight text-foreground">Workflows</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          The Verolas workforce available to this project. Click an agent to launch it on a brief.
+          End-to-end engineering sequences and individual agents available on this project.
+          Tier 3 co-pilots, Tier 2 drafters, Tier 1 productivity, and the Tier 4 peer-review
+          loop are grouped below with run counts and success rates.
         </p>
       </header>
 
