@@ -79,6 +79,8 @@ export interface MembershipSummary {
   organization_slug: string;
   organization_name: string;
   organization_status: OrganizationStatus;
+  organization_locale: string;
+  organization_region: string;
   role: MembershipRole;
 }
 
@@ -88,6 +90,7 @@ export interface Me {
   email: string | null;
   name: string | null;
   memberships: MembershipSummary[];
+  locale_override: string | null;
   created_at: string | null;
 }
 

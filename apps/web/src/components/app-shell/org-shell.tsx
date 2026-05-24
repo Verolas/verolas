@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  BookOpen,
   FolderKanban,
   LayoutGrid,
   Receipt,
@@ -61,6 +62,12 @@ export function OrgShell({ slug, children }: Props) {
       label: "Billing",
       href: `/o/${slug}/billing`,
       icon: <Receipt className="size-4" aria-hidden="true" />,
+    },
+    {
+      key: "research",
+      label: "Research",
+      href: `/o/${slug}/research`,
+      icon: <BookOpen className="size-4" aria-hidden="true" />,
     },
   ];
 
