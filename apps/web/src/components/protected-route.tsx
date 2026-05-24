@@ -38,7 +38,9 @@ export function ProtectedRoute({
     }
     if (!requireOrg) return;
     if (isLoadingMe) return;
-    if (me && me.memberships.length === 0) {
+    // Either /v1/me errored (me === null) or returned no memberships:
+    // both mean the caller hasn't onboarded yet, so send them to step one.
+    if (!me || me.memberships.length === 0) {
       router.replace("/onboarding/firm");
     }
   }, [isLoading, isLoadingMe, tokens, me, requireOrg, router]);

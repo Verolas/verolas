@@ -1,10 +1,4 @@
-"""GET /v1/me: the current account + the organisations it belongs to.
-
-This route runs with auth but no tenancy context, because it has to work
-before the caller has any organisations (the onboarding screen calls it
-right after sign-in to decide where to send the user). The query reads
-the user by Keycloak subject and joins memberships with their org rows.
-"""
+"""GET /v1/me: current account + memberships, sourced from app.account_view."""
 
 from __future__ import annotations
 
@@ -53,16 +47,13 @@ class MeOut(BaseModel):
 async def get_me(conn: BootstrapConn, auth: CurrentAuth) -> MeOut:
     """Return the caller's local user record plus their org memberships."""
     cur = await conn.execute(
-        """
-        SELECT id, email, name, created_at
-        FROM users
-        WHERE keycloak_subject = %s
-        """,
+        "SELECT app.account_view(%s)",
         (auth.claims.keycloak_subject,),
     )
-    user_row = await cur.fetchone()
+    row = await cur.fetchone()
+    payload = row[0] if row else None
 
-    if user_row is None:
+    if not payload or payload.get("user") is None:
         return MeOut(
             user_id=None,
             keycloak_subject=auth.claims.keycloak_subject,
@@ -72,37 +63,24 @@ async def get_me(conn: BootstrapConn, auth: CurrentAuth) -> MeOut:
             created_at=None,
         )
 
-    user_id, email, name, created_at = user_row
-
-    cur = await conn.execute(
-        """
-        SELECT o.id, o.slug, o.name, o.status, m.role
-        FROM memberships m
-        JOIN organizations o ON o.id = m.org_id
-        WHERE m.user_id = %s
-        ORDER BY o.created_at ASC
-        """,
-        (user_id,),
-    )
-    rows = await cur.fetchall()
+    user = payload["user"]
     memberships = [
         MembershipSummary(
-            organization_id=row[0],
-            organization_slug=row[1],
-            organization_name=row[2],
-            organization_status=OrganizationStatus(row[3]),
-            role=MembershipRole(row[4]),
+            organization_id=m["organization_id"],
+            organization_slug=m["organization_slug"],
+            organization_name=m["organization_name"],
+            organization_status=OrganizationStatus(m["organization_status"]),
+            role=MembershipRole(m["role"]),
         )
-        for row in rows
+        for m in payload.get("memberships", [])
     ]
-
     return MeOut(
-        user_id=user_id,
+        user_id=user["id"],
         keycloak_subject=auth.claims.keycloak_subject,
-        email=email,
-        name=name,
+        email=user.get("email") or auth.claims.email or None,
+        name=user.get("name"),
         memberships=memberships,
-        created_at=created_at,
+        created_at=user.get("created_at"),
     )
 
 

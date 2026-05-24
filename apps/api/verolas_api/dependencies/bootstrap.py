@@ -1,17 +1,13 @@
-"""Connection helpers that bypass row-level security for bootstrap writes.
+"""Connection helper for routes that run before any tenancy exists.
 
-The onboarding flow creates the first organisation, the user row, and the
-first owner membership before any tenancy context exists, so the regular
-`db_conn` dependency (which insists on a verified org_id from the token)
-cannot serve those writes. `bootstrap_conn` opens a connection with
-`row_security = off` for the duration of the transaction so the inserts
-succeed under the policies' implicit deny.
-
-The bypass is scoped to a single transaction and never leaks back into
-later requests; the pool's connection lifecycle is unchanged. We do not
-elevate the database role; we still run as `verolas_app`, which is why
-the migration that grants table privileges and the SECURITY DEFINER
-audit-trigger function still apply.
+`/v1/me` and `/v1/onboarding` happen before the caller has been wired
+into an organisation, so the regular org-scoped `db_conn` cannot serve
+them. We hand the route a plain transactional connection from the
+pool. The route is expected to talk to `app.account_view` and
+`app.onboard_account`, which are `SECURITY DEFINER` functions in the
+database that own the RLS bypass for these flows; the verolas_app role
+does not have BYPASSRLS, and `SET LOCAL row_security = off` would just
+make RLS-touching queries throw rather than bypass anything.
 """
 
 from __future__ import annotations
@@ -19,7 +15,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from psycopg import AsyncConnection
 
 from verolas_api.dependencies.auth import AuthContext, require_auth
@@ -30,26 +26,12 @@ async def bootstrap_conn(
     request: Request,
     auth: Annotated[AuthContext, Depends(require_auth)],
 ) -> AsyncIterator[AsyncConnection]:
-    """Yield a transactional connection that bypasses RLS for the request."""
+    """Yield a transactional connection; SECURITY DEFINER functions handle RLS."""
     _ = auth  # requires a verified caller; identity enforcement is in the route
     pool = get_pool(request)
     async with pool.connection() as conn:
         async with conn.transaction():
-            await conn.execute("SET LOCAL row_security = off")
             yield conn
 
 
 BootstrapConn = Annotated[AsyncConnection, Depends(bootstrap_conn)]
-
-
-def require_uuid(value: str, *, field: str) -> str:
-    """Cheap guard for fields that must look like a Keycloak subject UUID."""
-    from uuid import UUID
-
-    try:
-        return str(UUID(value))
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field} is not a valid identifier.",
-        ) from exc
