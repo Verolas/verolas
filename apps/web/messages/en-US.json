@@ -1,0 +1,31 @@
+{
+  "common": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "cancel": "Cancel",
+    "save": "Save",
+    "continue": "Continue",
+    "back": "Back",
+    "newProject": "New project",
+    "loading": "Loading"
+  },
+  "onboarding": {
+    "step1Title": "Set up your firm",
+    "step1Subtitle": "Workspaces are scoped to an engineering firm. You can rename or add more later.",
+    "firmName": "Firm name",
+    "workspaceUrl": "Workspace URL",
+    "region": "Region",
+    "regionHelp": "Drives the code set, units, fee schedule, drawing template, and permit format. Pick the region your firm primarily operates in.",
+    "yourName": "Your full name (optional)",
+    "step2Title": "Pick your primary discipline",
+    "step3Title": "Create your first project",
+    "createWorkspace": "Create workspace"
+  },
+  "projects": {
+    "header": "Projects",
+    "subtitle": "Each project groups deliverables, files, and the supervised AI runs for one engineering job.",
+    "search": "Search for a project",
+    "empty": "Create a project",
+    "emptyDescription": "Launch a supervised engineering workspace built for civil teams."
+  }
+}

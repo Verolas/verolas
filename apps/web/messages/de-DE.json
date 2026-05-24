@@ -1,0 +1,31 @@
+{
+  "common": {
+    "signIn": "Anmelden",
+    "signOut": "Abmelden",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "continue": "Weiter",
+    "back": "Zurück",
+    "newProject": "Neues Projekt",
+    "loading": "Wird geladen"
+  },
+  "onboarding": {
+    "step1Title": "Büro einrichten",
+    "step1Subtitle": "Arbeitsbereiche sind auf ein Ingenieurbüro begrenzt. Sie können später umbenennen oder weitere hinzufügen.",
+    "firmName": "Bürobezeichnung",
+    "workspaceUrl": "Arbeitsbereich-URL",
+    "region": "Region",
+    "regionHelp": "Bestimmt Normen, Einheiten, HOAI, Zeichnungsvorlage und Antragsformat. Wählen Sie die Region, in der Ihr Büro hauptsächlich tätig ist.",
+    "yourName": "Ihr vollständiger Name (optional)",
+    "step2Title": "Hauptfachrichtung wählen",
+    "step3Title": "Erstes Projekt anlegen",
+    "createWorkspace": "Arbeitsbereich erstellen"
+  },
+  "projects": {
+    "header": "Projekte",
+    "subtitle": "Jedes Projekt bündelt Leistungen, Dateien und die geprüften KI-Läufe für einen Auftrag.",
+    "search": "Projekt suchen",
+    "empty": "Projekt anlegen",
+    "emptyDescription": "Starten Sie einen geprüften Arbeitsbereich für Tragwerks- und Tiefbauteams."
+  }
+}

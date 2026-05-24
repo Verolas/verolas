@@ -48,6 +48,8 @@ export default function OnboardingProjectPage() {
         organization_name: draft.organization_name,
         primary_discipline: draft.primary_discipline,
         first_project_name: name.trim(),
+        region: draft.region ?? "us",
+        locale: draft.locale ?? "en-US",
       };
       if (draft.organization_slug) payload.organization_slug = draft.organization_slug;
       if (draft.full_name) payload.full_name = draft.full_name;
