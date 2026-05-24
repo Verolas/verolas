@@ -9,6 +9,7 @@ from verolas_api.routes.v1 import (
     onboarding,
     organizations,
     orgs,
+    project_files,
     projects,
     runs,
     users,
@@ -23,6 +24,7 @@ api_v1.include_router(runs.catalog_router)
 api_v1.include_router(connectors.catalog_router)
 api_v1.include_router(connectors.org_router)
 api_v1.include_router(connectors.project_router)
+api_v1.include_router(project_files.router)
 api_v1.include_router(users.router)
 api_v1.include_router(organizations.router)
 api_v1.include_router(projects.router)
