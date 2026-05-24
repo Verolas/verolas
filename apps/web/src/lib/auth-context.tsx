@@ -8,6 +8,11 @@
  * token is loaded it fetches /v1/me so consumers know which org(s) the
  * user belongs to. The API client reads the token through
  * `setApiTokenGetter` so server-rendered code never sees it.
+ *
+ * `meStatus` is the source of truth for "have we heard back from
+ * /v1/me yet"; the loading flag flips true the moment the token is
+ * read so ProtectedRoute never redirects in the gap between
+ * sessionStorage hydration and the first API response.
  */
 
 import {
@@ -31,11 +36,13 @@ import {
   type StoredTokens,
 } from "./oidc/session-storage";
 
+export type MeStatus = "idle" | "loading" | "loaded" | "error";
+
 interface AuthContextValue {
   tokens: StoredTokens | null;
   me: Me | null;
   isLoading: boolean;
-  isLoadingMe: boolean;
+  meStatus: MeStatus;
   meError: string | null;
   signIn: (postLoginPath?: string) => Promise<void>;
   signOut: () => void;
@@ -49,12 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokensState] = useState<StoredTokens | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMe, setIsLoadingMe] = useState(false);
+  const [meStatus, setMeStatus] = useState<MeStatus>("idle");
   const [meError, setMeError] = useState<string | null>(null);
   const tokensRef = useRef<StoredTokens | null>(null);
 
   useEffect(() => {
-    setTokensState(readTokens());
+    const initial = readTokens();
+    setTokensState(initial);
+    // Flip meStatus optimistically so ProtectedRoute knows /v1/me is
+    // about to load and does not redirect in the gap before the
+    // refreshMe effect fires.
+    if (initial) setMeStatus("loading");
     setIsLoading(false);
   }, []);
 
@@ -66,21 +78,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshMe = useCallback(async (): Promise<Me | null> => {
     if (!tokensRef.current) {
       setMe(null);
+      setMeStatus("idle");
       return null;
     }
-    setIsLoadingMe(true);
+    setMeStatus("loading");
     setMeError(null);
     try {
       const next = await meApi.get();
       setMe(next);
+      setMeStatus("loaded");
       return next;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setMeError(message);
       setMe(null);
+      setMeStatus("error");
       return null;
-    } finally {
-      setIsLoadingMe(false);
     }
   }, []);
 
@@ -89,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void refreshMe();
     } else {
       setMe(null);
+      setMeStatus("idle");
       setMeError(null);
     }
   }, [tokens, refreshMe]);
@@ -103,11 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearTokens();
     setTokensState(null);
     setMe(null);
+    setMeStatus("idle");
     window.location.assign("/login");
   }, []);
 
   const setTokens = useCallback((next: StoredTokens) => {
     writeTokens(next);
+    setMeStatus("loading");
     setTokensState(next);
   }, []);
 
@@ -116,14 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokens,
       me,
       isLoading,
-      isLoadingMe,
+      meStatus,
       meError,
       signIn,
       signOut,
       setTokens,
       refreshMe,
     }),
-    [tokens, me, isLoading, isLoadingMe, meError, signIn, signOut, setTokens, refreshMe],
+    [tokens, me, isLoading, meStatus, meError, signIn, signOut, setTokens, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -20,6 +20,7 @@ import { useState, type ReactNode } from "react";
 import { ProtectedRoute } from "@/components/protected-route";
 import { IconRail, type IconRailItem } from "@/components/icon-rail";
 import { TopBar } from "@/components/app-shell/top-bar";
+import { ShellFrame } from "@/components/app-shell/shell-frame";
 import { ProjectBreadcrumb } from "@/components/app-shell/project-breadcrumb";
 import { RightPanel } from "@/components/app-shell/right-panel";
 import { HelpPanelBody } from "@/components/app-shell/help-panel";
@@ -70,9 +71,8 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen bg-background">
-        <IconRail sections={[{ items: primary }, { items: data }, { items: platform }]} footer={footer} />
-        <div className="flex min-h-screen flex-1 flex-col">
+      <ShellFrame
+        topBar={
           <TopBar
             orgSlug={slug}
             orgName={activeOrg?.organization_name ?? slug}
@@ -85,51 +85,53 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
               onOpenConnect={() => setPanel("connect")}
             />
           </TopBar>
-          <main className="flex-1 overflow-x-hidden">{children}</main>
-        </div>
-        <RightPanel
-          open={panel === "help"}
-          title="Help & Support"
-          onClose={() => setPanel(null)}
-          header={
-            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="status-dot" data-status="active" />
-              All systems operational
-            </span>
-          }
-        >
-          <HelpPanelBody />
-        </RightPanel>
-        <RightPanel
-          open={panel === "assistant"}
-          title="Verolas Assistant"
-          onClose={() => setPanel(null)}
-          header={
-            <span className="flex items-center gap-1.5 text-[11px] text-primary">
-              <Sparkles className="size-3" aria-hidden="true" />
-              New chat
-            </span>
-          }
-          width="w-[420px]"
-        >
-          <AssistantPanelBody />
-        </RightPanel>
-        <RightPanel
-          open={panel === "notifications"}
-          title="Notifications"
-          onClose={() => setPanel(null)}
-        >
-          <NotificationsPanelBody />
-        </RightPanel>
-        <RightPanel
-          open={panel === "connect"}
-          title="Connect to this project"
-          onClose={() => setPanel(null)}
-          width="w-[480px]"
-        >
-          <ConnectPanelBody projectId={projectId} />
-        </RightPanel>
-      </div>
+        }
+        rail={<IconRail sections={[{ items: primary }, { items: data }, { items: platform }]} footer={footer} />}
+      >
+        {children}
+      </ShellFrame>
+      <RightPanel
+        open={panel === "help"}
+        title="Help & Support"
+        onClose={() => setPanel(null)}
+        header={
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="status-dot" data-status="active" />
+            All systems operational
+          </span>
+        }
+      >
+        <HelpPanelBody />
+      </RightPanel>
+      <RightPanel
+        open={panel === "assistant"}
+        title="Verolas Assistant"
+        onClose={() => setPanel(null)}
+        header={
+          <span className="flex items-center gap-1.5 text-[11px] text-primary">
+            <Sparkles className="size-3" aria-hidden="true" />
+            New chat
+          </span>
+        }
+        width="w-[420px]"
+      >
+        <AssistantPanelBody />
+      </RightPanel>
+      <RightPanel
+        open={panel === "notifications"}
+        title="Notifications"
+        onClose={() => setPanel(null)}
+      >
+        <NotificationsPanelBody />
+      </RightPanel>
+      <RightPanel
+        open={panel === "connect"}
+        title="Connect to this project"
+        onClose={() => setPanel(null)}
+        width="w-[480px]"
+      >
+        <ConnectPanelBody projectId={projectId} />
+      </RightPanel>
     </ProtectedRoute>
   );
 }

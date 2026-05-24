@@ -7,17 +7,17 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function LegacyProjectsRedirect() {
   const router = useRouter();
-  const { me, isLoadingMe } = useAuth();
+  const { me, meStatus } = useAuth();
 
   useEffect(() => {
-    if (isLoadingMe) return;
+    if (meStatus !== "loaded") return;
     const slug = me?.memberships?.[0]?.organization_slug;
     if (slug) {
       router.replace(`/o/${slug}/projects`);
     } else {
       router.replace("/onboarding/firm");
     }
-  }, [isLoadingMe, me, router]);
+  }, [meStatus, me, router]);
 
   return (
     <main
