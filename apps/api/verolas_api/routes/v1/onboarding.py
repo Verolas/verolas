@@ -1,23 +1,18 @@
-"""POST /v1/onboarding: provision a fresh account in one transaction.
+"""POST /v1/onboarding: one-shot account provisioning via app.onboard_account.
 
-A new caller arrives with a verified Keycloak token but no row in
-`users`, no organisation, no membership, no project. The wizard
-collects firm name + primary discipline + first project name and posts
-them here. This route writes everything in a single transaction with
-RLS off so the chicken-and-egg (no tenancy yet, but tenancy is what
-the policies require) is resolved cleanly.
-
-Slug is derived from the firm name if not supplied. The audit chain
-gets a `account.onboarded` entry plus the usual `project.create`.
+The wizard collects firm name + primary discipline + first project name
+and posts everything here. The Postgres function does the writes in a
+single transaction so the chicken-and-egg between RLS and "no tenancy
+yet" is resolved there instead of needing a privileged DB role.
 """
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
+import psycopg
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,8 +63,7 @@ async def onboard(
     conn: BootstrapConn,
     auth: CurrentAuth,
 ) -> OnboardingResult:
-    """Create the user row, the first organisation, the owner membership, and the first project."""
-
+    """Provision the user, the first org, the owner membership, and the first project."""
     slug = _resolve_slug(body.organization_slug, body.organization_name)
     if not _SLUG_RE.match(slug):
         raise HTTPException(
@@ -77,130 +71,46 @@ async def onboard(
             detail="Slug must be lowercase letters, digits, or hyphens; 1 to 40 characters.",
         )
 
-    # Idempotency on the user side: if this Keycloak subject has already
-    # onboarded, refuse rather than silently double-provisioning.
-    cur = await conn.execute(
-        "SELECT id FROM users WHERE keycloak_subject = %s",
-        (auth.claims.keycloak_subject,),
-    )
-    existing = await cur.fetchone()
-    if existing is not None:
-        cur = await conn.execute(
-            "SELECT 1 FROM memberships WHERE user_id = %s LIMIT 1",
-            (existing[0],),
-        )
-        if await cur.fetchone() is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Onboarding already complete for this account.",
-            )
-
-    user_uuid = _claims_subject_uuid(auth.claims.keycloak_subject)
-    org_uuid = uuid4()
-    membership_uuid = uuid4()
-    project_uuid = uuid4()
+    _validate_subject_uuid(auth.claims.keycloak_subject)
 
     email = auth.claims.email or ""
     display_name = body.full_name or _name_from_email(email)
 
-    await conn.execute(
-        """
-        INSERT INTO users (id, keycloak_subject, email, name, status)
-        VALUES (%s, %s, %s, %s, 'active')
-        ON CONFLICT (id) DO UPDATE
-          SET keycloak_subject = EXCLUDED.keycloak_subject,
-              email            = EXCLUDED.email,
-              name             = COALESCE(users.name, EXCLUDED.name),
-              status           = 'active'
-        """,
-        (user_uuid, auth.claims.keycloak_subject, email, display_name),
-    )
-
-    # Slug uniqueness: bail with a clear error if the desired slug is taken.
-    cur = await conn.execute(
-        "SELECT 1 FROM organizations WHERE slug = %s",
-        (slug,),
-    )
-    if await cur.fetchone() is not None:
+    try:
+        cur = await conn.execute(
+            "SELECT app.onboard_account(%s, %s, %s, %s, %s, %s, %s)",
+            (
+                auth.claims.keycloak_subject,
+                email,
+                display_name,
+                body.organization_name,
+                slug,
+                body.primary_discipline.value,
+                body.first_project_name,
+            ),
+        )
+    except psycopg.errors.UniqueViolation as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Workspace slug '{slug}' is taken; choose another.",
+        ) from exc
+
+    row = await cur.fetchone()
+    if row is None or row[0] is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Onboarding returned no result.",
         )
-
-    await conn.execute(
-        """
-        INSERT INTO organizations (id, name, slug, plan, status)
-        VALUES (%s, %s, %s, 'free', 'active')
-        """,
-        (org_uuid, body.organization_name, slug),
-    )
-
-    await conn.execute(
-        """
-        INSERT INTO memberships (id, user_id, org_id, role)
-        VALUES (%s, %s, %s, 'owner')
-        """,
-        (membership_uuid, user_uuid, org_uuid),
-    )
-
-    await conn.execute(
-        """
-        INSERT INTO projects (id, org_id, name, discipline)
-        VALUES (%s, %s, %s, %s)
-        """,
-        (project_uuid, org_uuid, body.first_project_name, body.primary_discipline.value),
-    )
-
-    # Audit chain: one entry for the onboarding event, one for the first project.
-    await conn.execute(
-        """
-        INSERT INTO activity_log (
-            id, org_id, actor_user_id, action, resource_type, resource_id, payload
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
-        """,
-        (
-            uuid4(),
-            org_uuid,
-            user_uuid,
-            "account.onboarded",
-            "organization",
-            org_uuid,
-            json.dumps(
-                {
-                    "organization_name": body.organization_name,
-                    "slug": slug,
-                    "primary_discipline": body.primary_discipline.value,
-                }
-            ),
-        ),
-    )
-    await conn.execute(
-        """
-        INSERT INTO activity_log (
-            id, org_id, actor_user_id, action, resource_type, resource_id, payload
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
-        """,
-        (
-            uuid4(),
-            org_uuid,
-            user_uuid,
-            "project.create",
-            "project",
-            project_uuid,
-            json.dumps(
-                {"name": body.first_project_name, "discipline": body.primary_discipline.value}
-            ),
-        ),
-    )
+    payload = row[0]
 
     return OnboardingResult(
-        user_id=user_uuid,
-        organization_id=org_uuid,
-        organization_slug=slug,
-        organization_name=body.organization_name,
-        project_id=project_uuid,
-        project_name=body.first_project_name,
-        discipline=body.primary_discipline,
+        user_id=payload["user_id"],
+        organization_id=payload["organization_id"],
+        organization_slug=payload["organization_slug"],
+        organization_name=payload["organization_name"],
+        project_id=payload["project_id"],
+        project_name=payload["project_name"],
+        discipline=Discipline(payload["discipline"]),
     )
 
 
@@ -211,9 +121,9 @@ def _resolve_slug(supplied: str | None, name: str) -> str:
     return base[:40] or "workspace"
 
 
-def _claims_subject_uuid(subject: str) -> UUID:
+def _validate_subject_uuid(subject: str) -> None:
     try:
-        return UUID(subject)
+        UUID(subject)
     except (ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
