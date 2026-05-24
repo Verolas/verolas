@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 from verolas_api.connector_oauth import OAUTH_CONFIGS, oauth_config
 from verolas_api.crypto import decrypt_credentials, encrypt_credentials
 
@@ -52,7 +50,7 @@ def test_decrypt_garbled_returns_empty() -> None:
     assert decrypt_credentials({"encrypted": "not-a-real-fernet-token"}) == {}
 
 
-def test_crypto_uses_env_key_if_provided(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_crypto_uses_env_key_if_provided(monkeypatch) -> None:
     from cryptography.fernet import Fernet
 
     monkeypatch.setenv("VEROLAS_CREDENTIAL_KEY", Fernet.generate_key().decode())
