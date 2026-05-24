@@ -1,5 +1,16 @@
 """Pydantic API schemas. These are the wire format, distinct from ORM models."""
 
+from verolas_api.schemas.connector import (
+    ConnectorBindingCreate,
+    ConnectorBindingOut,
+    ConnectorBindingStatus,
+    ConnectorClassOut,
+    ConnectorInstallationCreate,
+    ConnectorInstallationOut,
+    ConnectorInstallStatus,
+    ConnectorWaitlistCreate,
+    ConnectorWaitlistOut,
+)
 from verolas_api.schemas.organization import (
     OrganizationCreate,
     OrganizationOut,
@@ -20,6 +31,15 @@ from verolas_api.schemas.user import (
 )
 
 __all__ = [
+    "ConnectorBindingCreate",
+    "ConnectorBindingOut",
+    "ConnectorBindingStatus",
+    "ConnectorClassOut",
+    "ConnectorInstallStatus",
+    "ConnectorInstallationCreate",
+    "ConnectorInstallationOut",
+    "ConnectorWaitlistCreate",
+    "ConnectorWaitlistOut",
     "Discipline",
     "Membership",
     "MembershipRole",
