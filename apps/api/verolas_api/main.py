@@ -25,6 +25,11 @@ from verolas_api.middleware import RequestIdMiddleware, SlaTierMiddleware
 from verolas_api.routes import health
 from verolas_api.routes.v1 import api_v1
 from verolas_api.settings import Settings
+from verolas_api.vendors import bootstrap_vendors
+
+# Force vendor adapters to register their fetchers with
+# verolas_api.connector_instances before the first request.
+bootstrap_vendors()
 
 
 def create_app(
