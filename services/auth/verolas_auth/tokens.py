@@ -111,7 +111,12 @@ class TokenVerifier:
             kid = key.get("kid")
             if not isinstance(kid, str):
                 continue
-            keys[kid] = jwt.PyJWK(key).key
+            if key.get("use") not in (None, "sig"):
+                continue
+            try:
+                keys[kid] = jwt.PyJWK(key).key
+            except jwt.PyJWKError:
+                continue
         self._cache.keys = keys
         self._cache.fetched_at = time.monotonic()
 
