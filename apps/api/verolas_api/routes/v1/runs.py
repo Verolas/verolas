@@ -207,4 +207,4 @@ def _row_to_out(row: Any) -> AgentRunOut:
     )
 
 
-__all__: Annotated[list[str], "exported"] = ["router", "catalog_router"]
+__all__: Annotated[list[str], "exported"] = ["catalog_router", "router"]
