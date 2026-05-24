@@ -6,10 +6,7 @@
  * sees no token; this client is expected to run in the browser.
  */
 
-const BASE_URL =
-  (typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "")
-    : process.env.NEXT_PUBLIC_API_BASE_URL) ?? "https://api.dev.verolas.com";
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.dev.verolas.com";
 
 type TokenGetter = () => string | null;
 
