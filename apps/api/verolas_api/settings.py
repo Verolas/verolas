@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     oidc_jwks_cache_ttl_seconds: int = Field(default=600, ge=60)
     oidc_verify_tls: bool = Field(
         default=True,
-        description="Whether to verify TLS on the JWKS fetch. False bypasses cert validation; only safe inside a trusted network (dev cluster talking to in-cluster Keycloak through Traefik self-signed).",
+        description=(
+            "Verify TLS on the JWKS fetch. Disable only inside a trusted network, "
+            "e.g. the dev cluster talking to in-cluster Keycloak via Traefik self-signed."
+        ),
     )
 
     database_url: str | None = Field(
