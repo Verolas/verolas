@@ -323,6 +323,77 @@ export const connectorsApi = {
     ),
 };
 
+export type ProjectFileKind =
+  | "office_macro"
+  | "office_plain"
+  | "spreadsheet_plain"
+  | "cad_drawing"
+  | "cad_bim"
+  | "pdf"
+  | "image"
+  | "archive"
+  | "generic";
+
+export interface ProjectFile {
+  id: string;
+  org_id: string;
+  project_id: string | null;
+  uploaded_by_user_id: string | null;
+  filename: string;
+  content_type: string | null;
+  kind: ProjectFileKind;
+  macro_sandbox_required: boolean;
+  bucket: string;
+  object_key: string;
+  size_bytes: number | null;
+  status: string;
+  scan_verdict: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PresignedUpload {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  expires_at: string;
+}
+
+export interface ProjectFileUploadResponse {
+  file_id: string;
+  object_key: string;
+  bucket: string;
+  kind: ProjectFileKind;
+  macro_sandbox_required: boolean;
+  single_part_upload: PresignedUpload | null;
+  multipart_upload_id: string | null;
+  multipart_part_urls: PresignedUpload[] | null;
+}
+
+export const projectFilesApi = {
+  list: (slug: string, projectId: string) =>
+    request<ProjectFile[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/files/`,
+    ),
+  initiateUpload: (
+    slug: string,
+    projectId: string,
+    body: {
+      filename: string;
+      content_type?: string | null;
+      size_bytes: number;
+      multipart_part_count?: number;
+    },
+  ) =>
+    request<ProjectFileUploadResponse>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/files/`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+};
+
 export const runsApi = {
   list: (slug: string, projectId: string) =>
     request<AgentRun[]>(
