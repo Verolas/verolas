@@ -55,6 +55,14 @@ export type Discipline =
   | "practice";
 
 export type ProjectStatus = "active" | "archived" | "deleted";
+export type OrganizationStatus = "active" | "suspended" | "deleted";
+export type MembershipRole =
+  | "owner"
+  | "admin"
+  | "reviewer"
+  | "engineer"
+  | "viewer"
+  | "auditor";
 
 export interface Project {
   id: string;
@@ -66,10 +74,58 @@ export interface Project {
   updated_at: string;
 }
 
-export const projectsApi = {
-  list: () => request<Project[]>("/v1/projects/"),
-  create: (name: string, discipline: Discipline) =>
-    request<Project>("/v1/projects/", {
+export interface MembershipSummary {
+  organization_id: string;
+  organization_slug: string;
+  organization_name: string;
+  organization_status: OrganizationStatus;
+  role: MembershipRole;
+}
+
+export interface Me {
+  user_id: string | null;
+  keycloak_subject: string;
+  email: string | null;
+  name: string | null;
+  memberships: MembershipSummary[];
+  created_at: string | null;
+}
+
+export interface OnboardingPayload {
+  organization_name: string;
+  organization_slug?: string;
+  primary_discipline: Discipline;
+  first_project_name: string;
+  full_name?: string;
+}
+
+export interface OnboardingResult {
+  user_id: string;
+  organization_id: string;
+  organization_slug: string;
+  organization_name: string;
+  project_id: string;
+  project_name: string;
+  discipline: Discipline;
+}
+
+export const meApi = {
+  get: () => request<Me>("/v1/me/"),
+};
+
+export const onboardingApi = {
+  submit: (body: OnboardingPayload) =>
+    request<OnboardingResult>("/v1/onboarding/", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export const orgsApi = {
+  listProjects: (slug: string) =>
+    request<Project[]>(`/v1/orgs/${encodeURIComponent(slug)}/projects`),
+  createProject: (slug: string, name: string, discipline: Discipline) =>
+    request<Project>(`/v1/orgs/${encodeURIComponent(slug)}/projects`, {
       method: "POST",
       body: JSON.stringify({ name, discipline }),
     }),
