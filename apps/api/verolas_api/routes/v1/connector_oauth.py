@@ -154,8 +154,7 @@ async def oauth_start(
         "scope": " ".join(spec.scopes),
         "code_challenge": pkce_challenge,
         "code_challenge_method": "S256",
-        "access_type": "offline",
-        "prompt": "consent",
+        **cfg.extra_authorize_params,
     }
     return OAuthStartResponse(
         authorize_url=f"{cfg.authorize_url}?{urlencode(params)}",
