@@ -370,6 +370,44 @@ export interface ProjectFileUploadResponse {
   multipart_part_urls: PresignedUpload[] | null;
 }
 
+export interface LibraryFolder {
+  id: string;
+  org_id: string;
+  name: string;
+  description: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  file_count: number;
+}
+
+export interface LibraryFile {
+  id: string;
+  org_id: string;
+  library_folder_id: string | null;
+  uploaded_by_user_id: string | null;
+  filename: string;
+  content_type: string | null;
+  kind: string;
+  bucket: string;
+  object_key: string;
+  size_bytes: number | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LibraryFileUploadResponse {
+  file_id: string;
+  object_key: string;
+  bucket: string;
+  kind: string;
+  macro_sandbox_required: boolean;
+  single_part_upload: PresignedUpload | null;
+  multipart_upload_id: string | null;
+  multipart_part_urls: PresignedUpload[] | null;
+}
+
 export const projectFilesApi = {
   list: (slug: string, projectId: string) =>
     request<ProjectFile[]>(
@@ -391,6 +429,34 @@ export const projectFilesApi = {
         method: "POST",
         body: JSON.stringify(body),
       },
+    ),
+};
+
+export const libraryApi = {
+  listFolders: (slug: string) =>
+    request<LibraryFolder[]>(`/v1/orgs/${encodeURIComponent(slug)}/library/folders`),
+  createFolder: (slug: string, name: string, description?: string) =>
+    request<LibraryFolder>(`/v1/orgs/${encodeURIComponent(slug)}/library/folders`, {
+      method: "POST",
+      body: JSON.stringify(description ? { name, description } : { name }),
+    }),
+  deleteFolder: (slug: string, folderId: string) =>
+    request<void>(
+      `/v1/orgs/${encodeURIComponent(slug)}/library/folders/${folderId}`,
+      { method: "DELETE" },
+    ),
+  listFiles: (slug: string, folderId: string) =>
+    request<LibraryFile[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/library/folders/${folderId}/files`,
+    ),
+  uploadFile: (
+    slug: string,
+    folderId: string,
+    body: { filename: string; content_type?: string | null; size_bytes: number },
+  ) =>
+    request<LibraryFileUploadResponse>(
+      `/v1/orgs/${encodeURIComponent(slug)}/library/folders/${folderId}/files`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
 };
 
