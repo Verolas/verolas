@@ -12,6 +12,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CollectorRegistry
 from psycopg_pool import AsyncConnectionPool
 from verolas_auth import TokenVerifier, TokenVerifierSettings
@@ -121,6 +122,15 @@ def create_app(
         sla_violations=sla_violations,
     )
     app.add_middleware(RequestIdMiddleware)
+    if actual_settings.cors_allow_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=actual_settings.cors_allow_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
+            max_age=600,
+        )
 
     app.include_router(health.router)
     app.include_router(api_v1)

@@ -54,3 +54,8 @@ class Settings(BaseSettings):
         description="ClamAV daemon host. None disables scan, leaving file status at scanning.",
     )
     clamd_port: int = Field(default=3310, ge=1, le=65535)
+
+    cors_allow_origins: list[str] = Field(
+        default_factory=list,
+        description="Origins allowed to call the API from the browser, e.g. https://app.dev.verolas.com.",
+    )
