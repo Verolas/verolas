@@ -1,18 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, FolderPlus, MoreHorizontal, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, type Discipline, type Project, orgsApi } from "@/lib/api";
+import { ApiError, type Discipline, type Project, type ProjectStatus, orgsApi } from "@/lib/api";
 
 const DISCIPLINES: Discipline[] = [
   "structural",
@@ -28,8 +22,17 @@ type LoadState =
   | { kind: "ready"; projects: Project[] }
   | { kind: "error"; status: number; detail: string };
 
+type Filter = "all" | "active" | "archived";
+
+const STATUS_LABEL: Record<ProjectStatus, string> = {
+  active: "Active",
+  archived: "Archived",
+  deleted: "Deleted",
+};
+
 export function ProjectsPanel({ orgSlug }: { orgSlug: string }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [filter, setFilter] = useState<Filter>("all");
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [discipline, setDiscipline] = useState<Discipline>("structural");
@@ -54,6 +57,21 @@ export function ProjectsPanel({ orgSlug }: { orgSlug: string }) {
     void refresh();
   }, [refresh]);
 
+  const visible = useMemo(() => {
+    if (state.kind !== "ready") return [];
+    if (filter === "all") return state.projects;
+    return state.projects.filter((p) => p.status === filter);
+  }, [state, filter]);
+
+  const counts = useMemo(() => {
+    if (state.kind !== "ready") return { all: 0, active: 0, archived: 0 };
+    return {
+      all: state.projects.length,
+      active: state.projects.filter((p) => p.status === "active").length,
+      archived: state.projects.filter((p) => p.status === "archived").length,
+    };
+  }, [state]);
+
   async function handleCreate(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setFormError(null);
@@ -73,115 +91,215 @@ export function ProjectsPanel({ orgSlug }: { orgSlug: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground">
-            A project is the top level container for engineering work. Create one per building,
-            site, or infrastructure piece.
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold leading-tight text-foreground">Projects</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Each project groups deliverables, files, and the supervised AI runs for one
+            engineering job.
           </p>
         </div>
-        <Button onClick={() => setShowForm((value) => !value)}>
+        <Button onClick={() => setShowForm((v) => !v)}>
+          <Plus className="size-3.5" aria-hidden="true" />
           {showForm ? "Cancel" : "New project"}
         </Button>
-      </header>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="segmented">
+          <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
+            All <span className="ml-1 font-mono text-[10px] opacity-70">{counts.all}</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === "active"}
+            onClick={() => setFilter("active")}
+          >
+            Active <span className="ml-1 font-mono text-[10px] opacity-70">{counts.active}</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === "archived"}
+            onClick={() => setFilter("archived")}
+          >
+            Archived{" "}
+            <span className="ml-1 font-mono text-[10px] opacity-70">{counts.archived}</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md border border-hairline bg-surface px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Sort: Most recent
+          <ChevronDown className="size-3" aria-hidden="true" />
+        </button>
+      </div>
 
       {showForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>New project</CardTitle>
-            <CardDescription>Pick a discipline so the right workflows surface.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleCreate} aria-label="New project form">
-              <div className="space-y-2">
-                <Label htmlFor="name">Project name</Label>
-                <Input
-                  id="name"
-                  required
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="HQ Erweiterung"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="discipline">Discipline</Label>
-                <select
-                  id="discipline"
-                  value={discipline}
-                  onChange={(event) => setDiscipline(event.target.value as Discipline)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {DISCIPLINES.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {formError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {formError}
-                </p>
-              )}
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Creating..." : "Create project"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <form
+          className="rounded-lg border border-hairline bg-surface p-4 shadow-xs"
+          onSubmit={handleCreate}
+          aria-label="New project form"
+        >
+          <div className="grid gap-3 sm:grid-cols-[2fr_1fr_auto] sm:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-xs uppercase tracking-wider">
+                Project name
+              </Label>
+              <Input
+                id="name"
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="HQ Erweiterung"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="discipline" className="text-xs uppercase tracking-wider">
+                Discipline
+              </Label>
+              <select
+                id="discipline"
+                value={discipline}
+                onChange={(event) => setDiscipline(event.target.value as Discipline)}
+                className="flex h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm capitalize text-foreground"
+              >
+                {DISCIPLINES.map((option) => (
+                  <option key={option} value={option} className="capitalize">
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button type="submit" disabled={submitting} className="h-9">
+              {submitting ? "Creating..." : "Create"}
+            </Button>
+          </div>
+          {formError && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              {formError}
+            </p>
+          )}
+        </form>
       )}
 
-      <section aria-label="Project list">
-        {state.kind === "loading" && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading projects...
-          </p>
-        )}
-        {state.kind === "error" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Could not load projects</CardTitle>
-              <CardDescription>
-                {state.status === 401
-                  ? "Sign in with a Verolas account to view projects."
-                  : state.detail}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-        {state.kind === "ready" && state.projects.length === 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>No projects yet</CardTitle>
-              <CardDescription>
-                Create your first project above and it will appear here with its discipline and
-                last activity.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-        {state.kind === "ready" && state.projects.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {state.projects.map((project) => (
-              <Card key={project.id}>
-                <CardHeader>
-                  <CardTitle>{project.name}</CardTitle>
-                  <CardDescription>
-                    {project.discipline} · {project.status}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    Created {new Date(project.created_at).toLocaleString()}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
+      <ProjectsTable state={state} visible={visible} filter={filter} onCreate={() => setShowForm(true)} />
     </div>
   );
+}
+
+function ProjectsTable({
+  state,
+  visible,
+  filter,
+  onCreate,
+}: {
+  state: LoadState;
+  visible: Project[];
+  filter: Filter;
+  onCreate: () => void;
+}) {
+  if (state.kind === "loading") {
+    return (
+      <div className="rounded-lg border border-hairline bg-surface p-10 text-center text-sm text-muted-foreground">
+        Loading projects...
+      </div>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <div className="rounded-lg border border-hairline bg-surface p-6 text-sm">
+        <div className="font-medium text-foreground">Could not load projects</div>
+        <div className="mt-1 text-muted-foreground">
+          {state.status === 401
+            ? "Sign in with a Verolas account to view projects."
+            : state.detail}
+        </div>
+      </div>
+    );
+  }
+  if (visible.length === 0) {
+    return (
+      <div className="rounded-lg border border-hairline bg-surface p-10 text-center">
+        <div className="mx-auto mb-3 grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
+          <FolderPlus className="size-5" aria-hidden="true" />
+        </div>
+        <div className="text-sm font-medium text-foreground">
+          {filter === "all" ? "No projects yet" : `No ${filter} projects`}
+        </div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          Create the first one to start tracking deliverables, files, and supervised AI runs.
+        </div>
+        <Button onClick={onCreate} className="mt-4">
+          <Plus className="size-3.5" aria-hidden="true" />
+          New project
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-lg border border-hairline bg-surface shadow-xs">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-hairline bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="px-4 py-2.5">Project</th>
+            <th className="px-4 py-2.5">Discipline</th>
+            <th className="px-4 py-2.5">Status</th>
+            <th className="px-4 py-2.5">Created</th>
+            <th className="px-4 py-2.5 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((project, index) => (
+            <tr
+              key={project.id}
+              className={`group transition-colors hover:bg-muted/40 ${
+                index === visible.length - 1 ? "" : "border-b border-hairline"
+              }`}
+            >
+              <td className="px-4 py-3">
+                <div className="font-medium text-foreground">{project.name}</div>
+                <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                  {project.id.slice(0, 8)}
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <span className="pill" data-discipline={project.discipline}>
+                  {project.discipline}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                  <span className="status-dot" data-status={project.status} />
+                  {STATUS_LABEL[project.status]}
+                </span>
+              </td>
+              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                {formatDate(project.created_at)}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <button
+                  type="button"
+                  aria-label={`Actions for ${project.name}`}
+                  className="invisible inline-grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground group-hover:visible"
+                >
+                  <MoreHorizontal className="size-4" aria-hidden="true" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }

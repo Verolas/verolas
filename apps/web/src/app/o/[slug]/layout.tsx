@@ -14,11 +14,11 @@ export default async function OrgLayout({
   const { slug } = await params;
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen bg-background">
         <Sidebar activeOrgSlug={slug} />
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-screen flex-1 flex-col">
           <Header />
-          <div className="flex-1 p-6">{children}</div>
+          <div className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</div>
         </div>
       </div>
     </ProtectedRoute>

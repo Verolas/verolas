@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { AuthProvider } from "@/lib/auth-context";
+import { ThemeProvider, themeBootstrapScript } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -38,9 +39,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+        />
+      </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
