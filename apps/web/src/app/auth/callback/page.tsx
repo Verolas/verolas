@@ -3,13 +3,6 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { handleCallback } from "@/lib/oidc/client";
 import { takePostLoginRedirect } from "@/lib/oidc/session-storage";
@@ -34,24 +27,29 @@ function CallbackInner() {
   }, [router, searchParams, setTokens]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle>{error ? "Sign in failed" : "Signing you in"}</CardTitle>
-          <CardDescription>
-            {error
-              ? error
-              : "Exchanging the authorization code with the identity provider. This takes a moment."}
-          </CardDescription>
-        </CardHeader>
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
+      <div className="w-full max-w-md rounded-lg border border-hairline bg-surface p-6 shadow-sm">
+        <h1 className="text-lg font-semibold leading-snug text-foreground">
+          {error ? "Sign in failed" : "Signing you in"}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {error
+            ? error
+            : "Exchanging the authorization code with the identity provider. This usually takes a moment."}
+        </p>
         {error && (
-          <CardContent>
-            <p className="text-sm">
-              Return to <a className="underline" href="/login">the sign in page</a> to try again.
-            </p>
-          </CardContent>
+          <p className="mt-4 text-sm">
+            Return to{" "}
+            <a
+              className="text-foreground underline-offset-4 hover:underline"
+              href="/login"
+            >
+              the sign in page
+            </a>{" "}
+            to try again.
+          </p>
         )}
-      </Card>
+      </div>
     </main>
   );
 }

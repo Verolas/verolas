@@ -1,54 +1,229 @@
 @import "tailwindcss";
 
+/* Verolas design tokens.
+ *
+ * Light theme: warm off-white canvas, deep navy ink, brand blue as
+ * primary accent. Stripe-dashboard inspired — hairline borders, dense
+ * hierarchy, mono accents for metadata.
+ *
+ * Dark theme: deep navy canvas, near-white ink, brand blue brightened
+ * for AA contrast on dark. Toggled via data-theme="dark" on <html>.
+ */
+
 @theme {
-  /* Verolas brand tokens. Refine once the design system audit lands. */
-  --color-background: oklch(0.99 0.005 240);
-  --color-foreground: oklch(0.18 0.02 240);
-  --color-muted: oklch(0.95 0.01 240);
-  --color-muted-foreground: oklch(0.48 0.02 240);
-  --color-border: oklch(0.9 0.01 240);
-  --color-input: oklch(0.9 0.01 240);
-  --color-ring: oklch(0.55 0.18 250);
-  --color-primary: oklch(0.45 0.18 250);
-  --color-primary-foreground: oklch(0.99 0 0);
-  --color-secondary: oklch(0.96 0.005 240);
-  --color-secondary-foreground: oklch(0.18 0.02 240);
-  --color-destructive: oklch(0.55 0.22 25);
-  --color-destructive-foreground: oklch(0.99 0 0);
-  --color-accent: oklch(0.93 0.04 250);
-  --color-accent-foreground: oklch(0.18 0.02 240);
+  /* Brand */
+  --color-brand-50: #eef3fb;
+  --color-brand-100: #d8e2f3;
+  --color-brand-200: #b3c4e7;
+  --color-brand-300: #7d9bd2;
+  --color-brand-400: #4c7cd6;
+  --color-brand-500: #2c5cb0;
+  --color-brand-600: #1a3d80;
+  --color-brand-700: #122c5c;
+  --color-brand-800: #0c1f3f;
+  --color-brand-900: #07142a;
 
-  --color-verolas-deep: oklch(0.25 0.15 250);
-  --color-verolas-mid: oklch(0.55 0.18 250);
-  --color-verolas-soft: oklch(0.94 0.04 250);
+  /* Semantic — set per theme via :root + [data-theme="dark"] */
+  --color-background: #f6f9fc;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #fbfcfe;
+  --color-foreground: #0a2540;
+  --color-muted: #f1f4f9;
+  --color-muted-foreground: #5b6b85;
+  --color-border: #e3e8ef;
+  --color-border-strong: #d2dae5;
+  --color-input: #e3e8ef;
+  --color-ring: #4c7cd6;
+  --color-primary: #1a3d80;
+  --color-primary-hover: #122c5c;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #ffffff;
+  --color-secondary-foreground: #0a2540;
+  --color-accent: #eef3fb;
+  --color-accent-foreground: #122c5c;
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #047857;
+  --color-success-foreground: #ffffff;
+  --color-warning: #b45309;
+  --color-warning-foreground: #ffffff;
 
+  /* Discipline palette — used by pills, matched in light + dark */
+  --color-discipline-structural: #2c5cb0;
+  --color-discipline-geotech: #92400e;
+  --color-discipline-water: #0e7490;
+  --color-discipline-transport: #6d28d9;
+  --color-discipline-review: #047857;
+  --color-discipline-practice: #be185d;
+
+  /* Radii — sharper than shadcn defaults; matches Stripe dashboard */
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 16px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Elevation — soft, low-blur, navy-tinted */
+  --shadow-xs: 0 1px 2px rgba(10, 37, 64, 0.05);
+  --shadow-sm: 0 1px 3px rgba(10, 37, 64, 0.06), 0 1px 2px rgba(10, 37, 64, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(10, 37, 64, 0.08), 0 2px 4px rgba(10, 37, 64, 0.04);
+  --shadow-lg: 0 14px 28px -6px rgba(10, 37, 64, 0.12), 0 8px 16px -4px rgba(10, 37, 64, 0.06);
+
+  /* Type ramps */
+  --font-sans: var(--font-ibm-plex-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+[data-theme="dark"] {
+  --color-background: #0a0f1c;
+  --color-surface: #0f172a;
+  --color-surface-elevated: #131c33;
+  --color-foreground: #e6ebf2;
+  --color-muted: #131c33;
+  --color-muted-foreground: #8d9bb5;
+  --color-border: #1f2940;
+  --color-border-strong: #2a3654;
+  --color-input: #1f2940;
+  --color-ring: #6691e3;
+  --color-primary: #4c7cd6;
+  --color-primary-hover: #6691e3;
+  --color-primary-foreground: #0a0f1c;
+  --color-secondary: #131c33;
+  --color-secondary-foreground: #e6ebf2;
+  --color-accent: #1a253f;
+  --color-accent-foreground: #b3c4e7;
+  --color-destructive: #f87171;
+  --color-destructive-foreground: #0a0f1c;
+  --color-success: #34d399;
+  --color-success-foreground: #0a0f1c;
+  --color-warning: #fbbf24;
+  --color-warning-foreground: #0a0f1c;
+
+  --color-discipline-structural: #7d9bd2;
+  --color-discipline-geotech: #f59e0b;
+  --color-discipline-water: #22d3ee;
+  --color-discipline-transport: #a78bfa;
+  --color-discipline-review: #34d399;
+  --color-discipline-practice: #f472b6;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 14px 28px -6px rgba(0, 0, 0, 0.6), 0 8px 16px -4px rgba(0, 0, 0, 0.3);
 }
 
 @layer base {
   :root {
     color-scheme: light;
   }
+  [data-theme="dark"] {
+    color-scheme: dark;
+  }
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv05", "cv11";
   }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
+    font-family: var(--font-sans);
   }
   code,
   pre,
   kbd,
-  samp {
-    font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  samp,
+  .font-mono {
+    font-family: var(--font-mono);
   }
   *:focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
+  }
+  hr {
+    border-color: var(--color-border);
+  }
+}
+
+@layer components {
+  /* Discipline pill */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    color: var(--color-muted-foreground);
+    background: transparent;
+  }
+  .pill[data-discipline="structural"] {
+    color: var(--color-discipline-structural);
+  }
+  .pill[data-discipline="geotech"] {
+    color: var(--color-discipline-geotech);
+  }
+  .pill[data-discipline="water"] {
+    color: var(--color-discipline-water);
+  }
+  .pill[data-discipline="transport"] {
+    color: var(--color-discipline-transport);
+  }
+  .pill[data-discipline="review"] {
+    color: var(--color-discipline-review);
+  }
+  .pill[data-discipline="practice"] {
+    color: var(--color-discipline-practice);
+  }
+
+  /* Status dot used by table rows */
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-muted-foreground);
+  }
+  .status-dot[data-status="active"] {
+    background: var(--color-success);
+  }
+  .status-dot[data-status="archived"] {
+    background: var(--color-muted-foreground);
+  }
+  .status-dot[data-status="deleted"] {
+    background: var(--color-destructive);
+  }
+
+  /* Segmented tabs (All / Active / Archived). */
+  .segmented {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-muted);
+    gap: 0;
+  }
+  .segmented > button {
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-muted-foreground);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .segmented > button:hover {
+    color: var(--color-foreground);
+  }
+  .segmented > button[aria-pressed="true"] {
+    background: var(--color-surface);
+    color: var(--color-foreground);
+    box-shadow: var(--shadow-xs);
   }
 }

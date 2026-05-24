@@ -1,17 +1,10 @@
 "use client";
 
+import { Building2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 
 function LoginInner() {
@@ -34,16 +27,22 @@ function LoginInner() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-verolas-soft to-background p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Sign in to Verolas</CardTitle>
-          <CardDescription>
-            Verolas uses single sign on. Continue to be redirected to the identity provider.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmit} aria-label="Sign in form">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
+      <div className="w-full max-w-md">
+        <div className="mb-8 flex flex-col items-center gap-2 text-center">
+          <div className="grid size-10 place-items-center rounded-md bg-brand-700 text-white">
+            <Building2 className="size-5" aria-hidden="true" />
+          </div>
+          <span className="text-sm font-semibold text-foreground">Verolas</span>
+        </div>
+        <div className="rounded-lg border border-hairline bg-surface p-6 shadow-sm">
+          <h1 className="text-lg font-semibold leading-snug text-foreground">
+            Sign in to Verolas
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Verolas uses single sign on. Continue to be redirected to your identity provider.
+          </p>
+          <form className="mt-5 space-y-3" onSubmit={handleSubmit} aria-label="Sign in form">
             {error && (
               <p role="alert" className="text-sm text-destructive">
                 {error}
@@ -53,11 +52,20 @@ function LoginInner() {
               {submitting ? "Redirecting..." : "Continue with single sign on"}
             </Button>
           </form>
-        </CardContent>
-        <CardFooter className="flex flex-col items-start gap-2 text-sm text-muted-foreground">
-          <p>Local password sign in is not available.</p>
-        </CardFooter>
-      </Card>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Local password sign in is not available. Each sign in is audited.
+          </p>
+        </div>
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          New here?{" "}
+          <a
+            href="https://verolas.com"
+            className="text-foreground underline-offset-4 hover:underline"
+          >
+            Learn what Verolas does
+          </a>
+        </p>
+      </div>
     </main>
   );
 }
