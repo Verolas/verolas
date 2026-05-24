@@ -35,6 +35,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Path, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
+from verolas_auth import TenancyContext, sql_set_tenancy
 
 from verolas_api.audit import record_activity
 from verolas_api.connector_instances import fetcher_for
@@ -230,6 +231,11 @@ async def oauth_callback(
         "token_type": token_payload.get("token_type"),
         "account": token_payload.get("account") or token_payload.get("team"),
     }
+
+    # Set tenancy context now that we know which org owns this install.
+    # The connection was opened without an auth dep, so RLS would
+    # otherwise reject the INSERT into connector_installations.
+    await conn.execute(sql_set_tenancy(TenancyContext(user_id=user_id, org_id=org_id)))
 
     await conn.execute(
         """
