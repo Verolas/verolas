@@ -1,19 +1,27 @@
 "use client";
 
 import {
+  BadgeCheck,
+  Bot,
   Calculator,
-  ClipboardCheck,
   Cog,
-  FileText,
-  Folders,
+  Files,
   Home,
-  LayoutGrid,
   Layers,
-  LineChart,
+  Leaf,
+  MessageSquare,
+  Network,
   Pencil,
+  Play,
+  PlugZap,
+  Receipt,
+  ScanText,
+  Send,
+  Share2,
   Shield,
   ShieldAlert,
   Sparkles,
+  Workflow,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -36,6 +44,8 @@ interface Props {
   children: ReactNode;
 }
 
+const ICON = "size-4" as const;
+
 export function ProjectShell({ slug, projectId, projectName, children }: Props) {
   const { me } = useAuth();
   const activeOrg = me?.memberships?.find((m) => m.organization_slug === slug);
@@ -45,28 +55,42 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
 
   const base = `/o/${slug}/projects/${projectId}`;
 
-  const primary: IconRailItem[] = [
-    { key: "overview", label: "Project Overview", href: `${base}/overview`, icon: <Home className="size-4" /> },
-    { key: "drawings", label: "Drawings", href: `${base}/drawings`, icon: <Pencil className="size-4" /> },
-    { key: "calculations", label: "Calculations", href: `${base}/calculations`, icon: <Calculator className="size-4" /> },
+  const work: IconRailItem[] = [
+    { key: "overview", label: "Overview", href: `${base}/overview`, icon: <Home className={ICON} /> },
+    { key: "runs", label: "Runs", href: `${base}/runs`, icon: <Play className={ICON} /> },
+    { key: "drawings", label: "Drawings", href: `${base}/drawings`, icon: <Pencil className={ICON} /> },
+    { key: "models", label: "Models", href: `${base}/models`, icon: <Layers className={ICON} /> },
+    { key: "calculations", label: "Calculations", href: `${base}/calculations`, icon: <Calculator className={ICON} /> },
+    { key: "documents", label: "Documents", href: `${base}/documents`, icon: <Files className={ICON} /> },
   ];
 
-  const data: IconRailItem[] = [
-    { key: "documents", label: "Documents", href: `${base}/documents`, icon: <FileText className="size-4" /> },
-    { key: "models", label: "Models & BIM", href: `${base}/models`, icon: <Layers className="size-4" /> },
-    { key: "workspaces", label: "Workspaces", href: `${base}/workspaces`, icon: <Folders className="size-4" /> },
-    { key: "reviewers", label: "Reviewers", href: `${base}/reviewers`, icon: <ClipboardCheck className="size-4" /> },
+  const intelligence: IconRailItem[] = [
+    { key: "agents", label: "Agents", href: `${base}/agents`, icon: <Bot className={ICON} /> },
+    { key: "graph", label: "Graph", href: `${base}/graph`, icon: <Network className={ICON} /> },
+    { key: "codes", label: "Codes & Research", href: `${base}/codes`, icon: <ScanText className={ICON} /> },
   ];
 
-  const platform: IconRailItem[] = [
-    { key: "advisors", label: "Advisors", href: `${base}/advisors`, icon: <ShieldAlert className="size-4" /> },
-    { key: "observability", label: "Observability", href: `${base}/observability`, icon: <LineChart className="size-4" /> },
-    { key: "audit", label: "Audit Log", href: `${base}/audit`, icon: <Shield className="size-4" /> },
-    { key: "integrations", label: "Integrations", href: `${base}/integrations`, icon: <LayoutGrid className="size-4" /> },
+  const collaboration: IconRailItem[] = [
+    { key: "communications", label: "Communications", href: `${base}/communications`, icon: <MessageSquare className={ICON} /> },
+    { key: "reviewers", label: "Reviewers", href: `${base}/reviewers`, icon: <BadgeCheck className={ICON} /> },
+    { key: "sharing", label: "Sharing", href: `${base}/sharing`, icon: <Share2 className={ICON} /> },
+  ];
+
+  const delivery: IconRailItem[] = [
+    { key: "deliverables", label: "Deliverables", href: `${base}/deliverables`, icon: <Workflow className={ICON} /> },
+    { key: "submissions", label: "Submissions", href: `${base}/submissions`, icon: <Send className={ICON} /> },
+    { key: "estimating", label: "Estimating", href: `${base}/estimating`, icon: <Receipt className={ICON} /> },
+    { key: "sustainability", label: "Sustainability", href: `${base}/sustainability`, icon: <Leaf className={ICON} /> },
+  ];
+
+  const trust: IconRailItem[] = [
+    { key: "quality", label: "Quality", href: `${base}/quality`, icon: <ShieldAlert className={ICON} /> },
+    { key: "audit", label: "Audit Log", href: `${base}/audit`, icon: <Shield className={ICON} /> },
   ];
 
   const footer: IconRailItem[] = [
-    { key: "settings", label: "Project Settings", href: `${base}/settings`, icon: <Cog className="size-4" /> },
+    { key: "connectors", label: "Connectors", href: `${base}/connectors`, icon: <PlugZap className={ICON} /> },
+    { key: "settings", label: "Project Settings", href: `${base}/settings`, icon: <Cog className={ICON} /> },
   ];
 
   return (
@@ -87,7 +111,18 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
             />
           </TopBar>
         }
-        rail={<IconRail sections={[{ items: primary }, { items: data }, { items: platform }]} footer={footer} />}
+        rail={
+          <IconRail
+            sections={[
+              { items: work },
+              { items: intelligence },
+              { items: collaboration },
+              { items: delivery },
+              { items: trust },
+            ]}
+            footer={footer}
+          />
+        }
       >
         {children}
       </ShellFrame>
