@@ -200,6 +200,8 @@ export default function ProjectConnectorsPage() {
                   </div>
                   {openInstall === install.id ? (
                     <BindForm
+                      slug={slug}
+                      classId={install.class_id}
                       placeholder={cls.instance_label}
                       busy={busy === install.id}
                       onSubmit={(ref, label) => onBind(install, ref, label)}
@@ -216,16 +218,44 @@ export default function ProjectConnectorsPage() {
 }
 
 function BindForm({
+  slug,
+  classId,
   placeholder,
   busy,
   onSubmit,
 }: {
+  slug: string;
+  classId: string;
   placeholder: string;
   busy: boolean;
   onSubmit: (instanceRef: string, instanceLabel: string) => void;
 }) {
   const [ref, setRef] = useState("");
   const [label, setLabel] = useState("");
+  const [options, setOptions] = useState<
+    { ref: string; label: string; hint: string | null }[]
+  >([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingOptions(true);
+    connectorsApi
+      .listInstances(slug, classId)
+      .then((rows) => {
+        if (!cancelled) setOptions(rows);
+      })
+      .catch(() => {
+        // Silent fallback to free-form input.
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOptions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, classId]);
+
   return (
     <form
       className="mt-3 space-y-2"
@@ -235,31 +265,60 @@ function BindForm({
         onSubmit(ref.trim(), label.trim());
       }}
     >
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {loadingOptions ? (
+        <p className="text-xs text-muted-foreground">
+          <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden="true" />
+          Loading available {placeholder.toLowerCase()}s
+        </p>
+      ) : options.length > 0 ? (
         <label className="space-y-1 text-xs text-muted-foreground">
-          <span>{placeholder} identifier</span>
-          <input
+          <span>Pick a {placeholder.toLowerCase()}</span>
+          <select
             value={ref}
-            onChange={(e) => setRef(e.target.value)}
-            placeholder="e.g. workspace-id, library-guid, channel-id"
+            onChange={(e) => {
+              const next = e.target.value;
+              setRef(next);
+              const found = options.find((o) => o.ref === next);
+              if (found) setLabel(found.label);
+            }}
             className="block w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
             required
-          />
+          >
+            <option value="">{`Select ${placeholder.toLowerCase()}`}</option>
+            {options.map((o) => (
+              <option key={o.ref} value={o.ref}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
-        <label className="space-y-1 text-xs text-muted-foreground">
-          <span>Display label</span>
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="What the team will see"
-            className="block w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-            required
-          />
-        </label>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label className="space-y-1 text-xs text-muted-foreground">
+            <span>{placeholder} identifier</span>
+            <input
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+              placeholder="e.g. workspace-id, library-guid, channel-id"
+              className="block w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
+              required
+            />
+          </label>
+          <label className="space-y-1 text-xs text-muted-foreground">
+            <span>Display label</span>
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="What the team will see"
+              className="block w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
+              required
+            />
+          </label>
+        </div>
+      )}
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || !ref.trim() || !label.trim()}
         className="inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:bg-foreground/85 disabled:opacity-50"
       >
         {busy ? (
