@@ -1,11 +1,12 @@
 """Org-scoped tenancy dependency for routes under /v1/orgs/{org_slug}/...
 
-`db_org_conn` takes the slug from the URL, looks up the org, verifies
-the caller is a member, then sets `app.current_user_id` +
-`app.current_org_id` for RLS just like the legacy `db_conn`. The
-membership check runs with RLS off (since by definition we don't yet
-know the org_id) and then RLS is re-enabled for the rest of the
-transaction.
+`db_org_conn` resolves the org from the URL slug via the SECURITY
+DEFINER function `app.resolve_org_membership`, validates the caller
+is a member, then sets `app.current_user_id` + `app.current_org_id`
+for RLS just like the legacy `db_conn`. We use the helper function
+because the verolas_app role cannot bypass RLS itself, and
+`SET LOCAL row_security = off` only makes RLS-touching reads throw
+rather than bypass anything.
 """
 
 from __future__ import annotations
@@ -38,36 +39,27 @@ async def db_org_conn(
     auth: Annotated[AuthContext, Depends(require_auth)],
     org_slug: Annotated[str, Path(min_length=1, max_length=40)],
 ) -> AsyncIterator[tuple[AsyncConnection, OrgContext]]:
-    """Resolve org from URL slug, validate membership, set RLS tenancy."""
+    """Resolve org via SECURITY DEFINER lookup, validate membership, stamp tenancy."""
     pool = get_pool(request)
     async with pool.connection() as conn:
         async with conn.transaction():
-            # Stage 1: temporarily disable RLS so we can look up the org +
-            # membership before we know the tenancy.
-            await conn.execute("SET LOCAL row_security = off")
             cur = await conn.execute(
-                """
-                SELECT o.id, o.slug, m.role, u.id
-                FROM organizations o
-                JOIN memberships m ON m.org_id = o.id
-                JOIN users u ON u.id = m.user_id
-                WHERE o.slug = %s
-                  AND u.keycloak_subject = %s
-                  AND o.status <> 'deleted'
-                """,
-                (org_slug, auth.claims.keycloak_subject),
+                "SELECT app.resolve_org_membership(%s, %s)",
+                (auth.claims.keycloak_subject, org_slug),
             )
             row = await cur.fetchone()
-            if row is None:
+            payload = row[0] if row else None
+            if payload is None:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="No membership for this organisation.",
                 )
-            org_id, slug, role, user_id = row
 
-            # Stage 2: re-enable RLS and stamp tenancy. Every statement the
-            # route runs after this is filtered by RLS.
-            await conn.execute("SET LOCAL row_security = on")
+            user_id = UUID(payload["user_id"])
+            org_id = UUID(payload["organization_id"])
+            slug = payload["organization_slug"]
+            role = payload["role"]
+
             ctx = TenancyContext(user_id=user_id, org_id=org_id)
             await conn.execute(sql_set_tenancy(ctx))
 
