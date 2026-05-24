@@ -171,6 +171,52 @@ div.pf-c-form-control,
   border-radius: 0 !important;
 }
 
+/* Input group: the password fields wrap their input + show/hide toggle in
+ * .pf-v5-c-input-group. Without this it stacks vertically and the toggle
+ * looks like a stray square below the field. */
+.pf-v5-c-input-group {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.pf-v5-c-input-group > input,
+.pf-v5-c-input-group > .pf-v5-c-form-control {
+  flex: 1 1 auto;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.pf-v5-c-input-group > .pf-v5-c-button,
+.pf-v5-c-input-group > button {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--verolas-surface);
+  color: var(--verolas-muted);
+  border: 1px solid var(--verolas-border);
+  border-radius: 0 8px 8px 0;
+  font-weight: 400;
+}
+
+.pf-v5-c-input-group > .pf-v5-c-button:hover {
+  background: var(--verolas-soft);
+  color: var(--verolas-deep);
+  border-color: var(--verolas-bright);
+}
+
+/* Helper text and password strength meter hooks that otherwise render as
+ * stray rectangles thanks to the generic alert styles further up. */
+.pf-v5-c-form__helper-text:empty,
+.pf-v5-c-helper-text:empty {
+  display: none;
+}
+
 .pf-v5-c-button,
 .pf-c-button,
 input[type="submit"],
