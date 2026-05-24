@@ -267,17 +267,21 @@ function BindForm({
     { ref: string; label: string; hint: string | null }[]
   >([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadingOptions(true);
+    setOptionsError(null);
     connectorsApi
       .listInstances(slug, classId)
       .then((rows) => {
         if (!cancelled) setOptions(rows);
       })
-      .catch(() => {
-        // Silent fallback to free-form input.
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const detail = err instanceof ApiError ? err.detail : String(err);
+        setOptionsError(detail);
       })
       .finally(() => {
         if (!cancelled) setLoadingOptions(false);
@@ -300,6 +304,10 @@ function BindForm({
         <p className="text-xs text-muted-foreground">
           <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden="true" />
           Loading available {placeholder.toLowerCase()}s
+        </p>
+      ) : optionsError ? (
+        <p className="rounded-md border border-amber-400/40 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-300">
+          Could not load picker options ({optionsError}). Falling back to manual entry below.
         </p>
       ) : options.length > 0 ? (
         <label className="space-y-1 text-xs text-muted-foreground">
