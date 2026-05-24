@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     )
     oidc_audience: str = Field(default="verolas-api", description="Expected aud claim")
     oidc_jwks_cache_ttl_seconds: int = Field(default=600, ge=60)
+    oidc_verify_tls: bool = Field(
+        default=True,
+        description="Whether to verify TLS on the JWKS fetch. False bypasses cert validation; only safe inside a trusted network (dev cluster talking to in-cluster Keycloak through Traefik self-signed).",
+    )
 
     database_url: str | None = Field(
         default=None,

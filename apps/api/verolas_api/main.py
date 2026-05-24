@@ -52,12 +52,15 @@ def create_app(
         )
 
     if token_verifier is None:
+        import httpx
+
         token_verifier = TokenVerifier(
             TokenVerifierSettings(
                 issuer=actual_settings.oidc_issuer,
                 audience=actual_settings.oidc_audience,
                 jwks_cache_ttl_seconds=actual_settings.oidc_jwks_cache_ttl_seconds,
-            )
+            ),
+            http_client=httpx.Client(verify=actual_settings.oidc_verify_tls, timeout=5.0),
         )
 
     @asynccontextmanager
