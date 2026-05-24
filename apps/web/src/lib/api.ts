@@ -186,6 +186,143 @@ export const orgsApi = {
     request<AgentSummary[]>(`/v1/orgs/${encodeURIComponent(slug)}/agents/`),
 };
 
+export type ConnectorTier = "A" | "B" | "C" | "internal";
+export type ConnectorAuthMethod =
+  | "oauth2_pkce"
+  | "oauth2_client_credentials"
+  | "api_key"
+  | "vendor_sdk"
+  | "on_prem_agent"
+  | "internal";
+export type ConnectorCategory =
+  | "cad_bim"
+  | "structural_fea"
+  | "geotech_fea"
+  | "documents"
+  | "construction_mgmt"
+  | "markup"
+  | "spreadsheets"
+  | "communication"
+  | "signing"
+  | "internal";
+
+export interface ConnectorClass {
+  id: string;
+  name: string;
+  vendor: string;
+  category: ConnectorCategory;
+  tier: ConnectorTier;
+  auth_method: ConnectorAuthMethod;
+  blurb: string;
+  region_tags: string[];
+  scopes: string[];
+  docs_url: string | null;
+  instance_label: string;
+}
+
+export type ConnectorInstallStatus =
+  | "pending"
+  | "installed"
+  | "error"
+  | "uninstalled";
+
+export interface ConnectorInstallation {
+  id: string;
+  org_id: string;
+  class_id: string;
+  status: ConnectorInstallStatus;
+  installed_by_user_id: string | null;
+  scopes: string[];
+  oauth_account: Record<string, unknown>;
+  last_sync_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ConnectorBindingStatus = "active" | "paused" | "error";
+
+export interface ConnectorBinding {
+  id: string;
+  project_id: string;
+  org_id: string;
+  installation_id: string;
+  class_id: string;
+  instance_ref: string;
+  instance_label: string;
+  config: Record<string, unknown>;
+  status: ConnectorBindingStatus;
+  last_sync_at: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConnectorWaitlistEntry {
+  id: string;
+  org_id: string;
+  class_id: string;
+  requested_by_user_id: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export const connectorsApi = {
+  catalog: () => request<ConnectorClass[]>("/v1/connectors/catalog"),
+  listInstallations: (slug: string) =>
+    request<ConnectorInstallation[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/connectors/installations`,
+    ),
+  install: (slug: string, classId: string) =>
+    request<ConnectorInstallation>(
+      `/v1/orgs/${encodeURIComponent(slug)}/connectors/installations`,
+      {
+        method: "POST",
+        body: JSON.stringify({ class_id: classId }),
+      },
+    ),
+  uninstall: (slug: string, installationId: string) =>
+    request<void>(
+      `/v1/orgs/${encodeURIComponent(slug)}/connectors/installations/${installationId}`,
+      { method: "DELETE" },
+    ),
+  waitlist: (slug: string, classId: string, note?: string) =>
+    request<ConnectorWaitlistEntry>(
+      `/v1/orgs/${encodeURIComponent(slug)}/connectors/waitlist`,
+      {
+        method: "POST",
+        body: JSON.stringify(note ? { class_id: classId, note } : { class_id: classId }),
+      },
+    ),
+  listBindings: (slug: string, projectId: string) =>
+    request<ConnectorBinding[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/connectors/bindings`,
+    ),
+  bind: (
+    slug: string,
+    projectId: string,
+    installationId: string,
+    instanceRef: string,
+    instanceLabel: string,
+  ) =>
+    request<ConnectorBinding>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/connectors/bindings`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          installation_id: installationId,
+          instance_ref: instanceRef,
+          instance_label: instanceLabel,
+        }),
+      },
+    ),
+  unbind: (slug: string, projectId: string, bindingId: string) =>
+    request<void>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/connectors/bindings/${bindingId}`,
+      { method: "DELETE" },
+    ),
+};
+
 export const runsApi = {
   list: (slug: string, projectId: string) =>
     request<AgentRun[]>(
