@@ -3,6 +3,9 @@ verolas-product-bible.md
 CLAUDE.md
 .claude/
 
+# Local-only design references
+design-copy/
+
 # Node
 node_modules/
 .pnpm-store/
