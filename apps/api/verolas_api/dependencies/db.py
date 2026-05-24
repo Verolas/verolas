@@ -46,10 +46,10 @@ async def db_conn(
     pool = get_pool(request)
     async with pool.connection() as conn:
         async with conn.transaction():
-            # Resolve the application user_id from the Keycloak subject. For
-            # phase 8 we proxy the subject through as the user id when the
-            # caller has not yet been provisioned in `users`; the auth library
-            # will switch to a real lookup once Keycloak federation lands.
+            # Resolve the application user_id from the Keycloak subject. We
+            # proxy the subject through as the user id when the caller has
+            # not yet been provisioned in `users`; the auth library will
+            # switch to a real lookup once Keycloak federation lands.
             user_id = _to_uuid_or_zero(auth.claims.keycloak_subject)
 
             ctx = TenancyContext(

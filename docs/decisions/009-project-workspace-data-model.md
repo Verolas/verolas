@@ -36,7 +36,7 @@ Alternatives:
 
 ### Files now link to a project and workspace (chosen)
 
-- The files table from phase 6 grows two nullable columns: project_id and workspace_id. Existing files (none in production, by definition) stay nullable. New uploads from the file upload UI carry the project association.
+- The files table from the object storage workstream grows two nullable columns: project_id and workspace_id. Existing files (none in production, by definition) stay nullable. New uploads from the file upload UI carry the project association.
 
 ### Frontend project list and create form (chosen, half delivered today)
 
@@ -44,17 +44,17 @@ Alternatives:
 
 ### Phase 8 deferred items
 
-- **File upload UI inside a project workspace.** The presigned URL machinery exists (phase 6), the file ↔ project link exists (this phase), and the front end will get a file picker in a follow up. The audit log entry pattern for uploads is the same as for project creates; no new chain work needed.
+- **File upload UI inside a project workspace.** The presigned URL machinery exists (the object storage workstream), the file ↔ project link exists (this phase), and the front end will get a file picker in a follow up. The audit log entry pattern for uploads is the same as for project creates; no new chain work needed.
 - **OIDC PKCE on the front end.** The `/login` page is still a static skeleton. Until that lands, the API enforces auth but the front end cannot acquire a token automatically; manual injection works for development.
 
 ## Decision
 
 | Bible bullet | Implementation |
 | --- | --- |
-| Project, Workspace, File, Membership, ActivityLog tables | Alembic revision `c3e5f7b9d1f3` adds projects, workspaces, activity_log; files (phase 6) gains project_id and workspace_id; memberships exists from phase 4. |
+| Project, Workspace, File, Membership, ActivityLog tables | Alembic revision `c3e5f7b9d1f3` adds projects, workspaces, activity_log; files (the object storage workstream) gains project_id and workspace_id; memberships exists from the auth workstream. |
 | API endpoints CRUD on projects | `apps/api/verolas_api/routes/v1/projects.py` exposes list, get, create with RLS aware transactions. PATCH and DELETE come in a follow up. |
 | Frontend project creation flow + project list | `apps/web/src/components/projects-panel.tsx` (client component) hits the API and renders states for loading, error, empty, and populated. |
-| File upload UI in project workspace | Deferred; presigned URL service is already production ready from phase 6. |
+| File upload UI in project workspace | Deferred; presigned URL service is already production ready from the object storage workstream. |
 | Audit log infrastructure: append only, Merkle chained | `app.activity_log_chain` BEFORE INSERT trigger computes prev_hash, this_hash, and seq, takes a per org row lock to serialise concurrent inserts. UPDATE and DELETE blocked by RLS policy that always evaluates false. `audit.record_activity` helper at `apps/api/verolas_api/audit.py` is the only writer in application code. |
 
 ## Consequences
