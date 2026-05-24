@@ -212,6 +212,23 @@ class PresignedUrlService:
             UploadId=upload_id,
         )
 
+    def put_bytes(self, *, key: str, body: bytes, content_type: str | None = None) -> None:
+        """Stream a small object straight to S3 in one shot.
+
+        Used by connector sync engines that already hold the bytes locally
+        (after downloading from the source vendor). Larger objects should
+        keep using the presigned multipart path so we never buffer huge
+        files in the api process.
+        """
+        kwargs: dict[str, object] = {
+            "Bucket": self._settings.bucket,
+            "Key": key,
+            "Body": body,
+        }
+        if content_type:
+            kwargs["ContentType"] = content_type
+        self._client.put_object(**kwargs)
+
 
 __all__ = [
     "PresignedDownload",
