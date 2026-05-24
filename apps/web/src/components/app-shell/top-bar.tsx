@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { ThemeMenuItem } from "@/components/theme-menu-item";
-import { Logo } from "@/components/app-shell/logo";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -19,11 +18,7 @@ interface Props {
 
 export function TopBar({ orgSlug, orgName, plan = "FREE", children, onOpenPanel }: Props) {
   return (
-    <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-surface px-3">
-      <Link href="/" className="flex size-7 items-center justify-center" aria-label="Home">
-        <Logo className="size-5 text-primary" />
-      </Link>
-      <span className="text-muted-foreground" aria-hidden="true">/</span>
+    <header className="flex h-12 flex-1 items-center gap-2 border-b border-border bg-surface px-3">
       {orgName && orgSlug ? (
         <OrgChip name={orgName} slug={orgSlug} plan={plan} />
       ) : (

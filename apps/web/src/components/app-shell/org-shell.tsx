@@ -13,6 +13,7 @@ import { useState, type ReactNode } from "react";
 import { ProtectedRoute } from "@/components/protected-route";
 import { IconRail, type IconRailItem } from "@/components/icon-rail";
 import { TopBar } from "@/components/app-shell/top-bar";
+import { ShellFrame } from "@/components/app-shell/shell-frame";
 import { RightPanel } from "@/components/app-shell/right-panel";
 import { HelpPanelBody } from "@/components/app-shell/help-panel";
 import { AssistantPanelBody } from "@/components/app-shell/assistant-panel";
@@ -74,44 +75,45 @@ export function OrgShell({ slug, children }: Props) {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen bg-background">
-        <IconRail sections={[{ items }]} footer={footer} />
-        <div className="flex min-h-screen flex-1 flex-col">
+      <ShellFrame
+        topBar={
           <TopBar
             orgSlug={slug}
             orgName={activeOrg?.organization_name ?? slug}
             onOpenPanel={(next) => setPanel((current) => (current === next ? null : next))}
           />
-          <main className="flex-1 px-8 py-8">{children}</main>
-        </div>
-        <RightPanel
-          open={panel === "help"}
-          title="Help & Support"
-          onClose={() => setPanel(null)}
-          header={
-            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="status-dot" data-status="active" />
-              All systems operational
-            </span>
-          }
-        >
-          <HelpPanelBody />
-        </RightPanel>
-        <RightPanel
-          open={panel === "assistant"}
-          title="Verolas Assistant"
-          onClose={() => setPanel(null)}
-        >
-          <AssistantPanelBody />
-        </RightPanel>
-        <RightPanel
-          open={panel === "notifications"}
-          title="Notifications"
-          onClose={() => setPanel(null)}
-        >
-          <NotificationsPanelBody />
-        </RightPanel>
-      </div>
+        }
+        rail={<IconRail sections={[{ items }]} footer={footer} />}
+      >
+        <div className="px-8 py-8">{children}</div>
+      </ShellFrame>
+      <RightPanel
+        open={panel === "help"}
+        title="Help & Support"
+        onClose={() => setPanel(null)}
+        header={
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="status-dot" data-status="active" />
+            All systems operational
+          </span>
+        }
+      >
+        <HelpPanelBody />
+      </RightPanel>
+      <RightPanel
+        open={panel === "assistant"}
+        title="Verolas Assistant"
+        onClose={() => setPanel(null)}
+      >
+        <AssistantPanelBody />
+      </RightPanel>
+      <RightPanel
+        open={panel === "notifications"}
+        title="Notifications"
+        onClose={() => setPanel(null)}
+      >
+        <NotificationsPanelBody />
+      </RightPanel>
     </ProtectedRoute>
   );
 }

@@ -23,39 +23,54 @@ interface IconRailProps {
   sections: IconRailSection[];
   /** Items pinned to the bottom of the rail (e.g. Project Settings). */
   footer?: IconRailItem[];
-  /** Width when expanded by hover. Defaults to 12rem. */
-  expandedWidth?: string;
-  /** Optional override for matching the active key explicitly (useful for nested routes). */
+  /** Optional override for matching the active key explicitly. */
   activeKey?: string;
 }
 
-const COLLAPSED_W = "w-12"; // 48px
-const EXPANDED_W = "w-48"; // 192px
-
+/**
+ * Two-layer rail:
+ * - The outer container takes 48px in the layout flow and never shifts.
+ * - The inner panel is absolute-positioned, starts at 48px wide, and
+ *   widens to 192px on hover so the labels overlay the page content
+ *   to the right instead of pushing it.
+ */
 export function IconRail({ sections, footer, activeKey }: IconRailProps) {
   const pathname = usePathname() ?? "";
   const [open, setOpen] = useState(false);
 
   return (
-    <div
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
-        setOpen(false);
-      }}
-      className={cn(
-        "sticky top-0 z-20 hidden h-screen shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-150 md:flex",
-        open ? EXPANDED_W : COLLAPSED_W,
-      )}
-      aria-label="Primary navigation"
-      data-state={open ? "expanded" : "collapsed"}
-    >
-      <nav className="flex-1 overflow-hidden py-2">
-        {sections.map((section, index) => (
-          <div key={index} className={index > 0 ? "mt-2 border-t border-border pt-2" : ""}>
-            {section.items.map((item) => (
+    <div className="relative hidden w-12 shrink-0 md:block" aria-label="Primary navigation">
+      <div
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+          setOpen(false);
+        }}
+        className={cn(
+          "absolute left-0 top-0 z-20 flex h-[calc(100vh-3rem)] flex-col border-r border-border bg-surface transition-[width] duration-150",
+          open ? "w-48 shadow-md" : "w-12",
+        )}
+        data-state={open ? "expanded" : "collapsed"}
+      >
+        <nav className="flex-1 overflow-hidden py-2">
+          {sections.map((section, index) => (
+            <div key={index} className={index > 0 ? "mt-2 border-t border-border pt-2" : ""}>
+              {section.items.map((item) => (
+                <RailLink
+                  key={item.key}
+                  item={item}
+                  open={open}
+                  active={isActive(item, pathname, activeKey)}
+                />
+              ))}
+            </div>
+          ))}
+        </nav>
+        {footer && footer.length > 0 && (
+          <div className="border-t border-border py-2">
+            {footer.map((item) => (
               <RailLink
                 key={item.key}
                 item={item}
@@ -64,20 +79,8 @@ export function IconRail({ sections, footer, activeKey }: IconRailProps) {
               />
             ))}
           </div>
-        ))}
-      </nav>
-      {footer && footer.length > 0 && (
-        <div className="border-t border-border py-2">
-          {footer.map((item) => (
-            <RailLink
-              key={item.key}
-              item={item}
-              open={open}
-              active={isActive(item, pathname, activeKey)}
-            />
-          ))}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
