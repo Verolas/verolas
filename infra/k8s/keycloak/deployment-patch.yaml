@@ -1,0 +1,44 @@
+# Strategic-merge patch applied on top of the existing keycloak Deployment
+# to mount the Verolas-branded login theme and turn off template/theme
+# caching so config map updates show up without a rebuild.
+#
+# Apply with:
+#   kubectl patch deploy keycloak -n keycloak --type strategic --patch-file infra/k8s/keycloak/deployment-patch.yaml
+spec:
+  template:
+    spec:
+      volumes:
+        - name: verolas-theme-login
+          configMap:
+            name: verolas-theme-login
+        - name: verolas-theme-login-css
+          configMap:
+            name: verolas-theme-login-css
+        - name: verolas-theme-login-img
+          configMap:
+            name: verolas-theme-login-img
+      containers:
+        - name: keycloak
+          volumeMounts:
+            - name: verolas-theme-login
+              mountPath: /opt/keycloak/themes/verolas/login/theme.properties
+              subPath: theme.properties
+            - name: verolas-theme-login
+              mountPath: /opt/keycloak/themes/verolas/login/template.ftl
+              subPath: template.ftl
+            - name: verolas-theme-login
+              mountPath: /opt/keycloak/themes/verolas/login/login.ftl
+              subPath: login.ftl
+            - name: verolas-theme-login-css
+              mountPath: /opt/keycloak/themes/verolas/login/resources/css/styles.css
+              subPath: styles.css
+            - name: verolas-theme-login-img
+              mountPath: /opt/keycloak/themes/verolas/login/resources/img/logo.svg
+              subPath: logo.svg
+          env:
+            - name: KC_SPI_THEME_STATIC_MAX_AGE
+              value: "-1"
+            - name: KC_SPI_THEME_CACHE_THEMES
+              value: "false"
+            - name: KC_SPI_THEME_CACHE_TEMPLATES
+              value: "false"
