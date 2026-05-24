@@ -9,7 +9,6 @@ configMapGenerator:
       - themes/verolas/login/theme.properties
       - themes/verolas/login/template.ftl
       - themes/verolas/login/login.ftl
-      - themes/verolas/login/register.ftl
   - name: verolas-theme-login-css
     files:
       - themes/verolas/login/resources/css/styles.css

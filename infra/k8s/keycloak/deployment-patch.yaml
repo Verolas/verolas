@@ -29,9 +29,6 @@ spec:
             - name: verolas-theme-login
               mountPath: /opt/keycloak/themes/verolas/login/login.ftl
               subPath: login.ftl
-            - name: verolas-theme-login
-              mountPath: /opt/keycloak/themes/verolas/login/register.ftl
-              subPath: register.ftl
             - name: verolas-theme-login-css
               mountPath: /opt/keycloak/themes/verolas/login/resources/css/styles.css
               subPath: styles.css
