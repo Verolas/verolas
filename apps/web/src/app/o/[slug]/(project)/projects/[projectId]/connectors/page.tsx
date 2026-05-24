@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Loader2, Plug, Trash2 } from "lucide-react";
+import { AlertCircle, Loader2, Plug, RefreshCw, Trash2 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -102,6 +102,24 @@ export default function ProjectConnectorsPage() {
     [slug, projectId, refresh],
   );
 
+  const onSync = useCallback(
+    async (binding: ConnectorBinding) => {
+      setBusy(binding.id);
+      try {
+        const result = await connectorsApi.syncBinding(slug, projectId, binding.id);
+        setError(
+          `Sync complete: ${result.files_added} added, ${result.files_updated} updated, ${result.files_removed} removed.`,
+        );
+        await refresh();
+      } catch (err) {
+        setError(err instanceof ApiError ? err.detail : String(err));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [slug, projectId, refresh],
+  );
+
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-5xl px-8 py-8 text-sm text-muted-foreground">
@@ -149,6 +167,19 @@ export default function ProjectConnectorsPage() {
                   </p>
                   <p className="truncate text-xs text-muted-foreground">{b.instance_ref}</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onSync(b)}
+                  disabled={busy === b.id}
+                  className="inline-flex items-center gap-1 rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:bg-foreground/85 disabled:opacity-50"
+                >
+                  {busy === b.id ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="size-3" aria-hidden="true" />
+                  )}
+                  Sync now
+                </button>
                 <button
                   type="button"
                   onClick={() => onUnbind(b)}

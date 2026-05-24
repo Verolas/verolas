@@ -321,6 +321,17 @@ export const connectorsApi = {
       `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/connectors/bindings/${bindingId}`,
       { method: "DELETE" },
     ),
+  syncBinding: (slug: string, projectId: string, bindingId: string) =>
+    request<{
+      files_added: number;
+      files_updated: number;
+      files_removed: number;
+      bytes_pulled: number;
+      notes: string[];
+    }>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/connectors/bindings/${bindingId}/sync`,
+      { method: "POST" },
+    ),
   oauthStart: (slug: string, classId: string, redirectAfter: string) =>
     request<{ authorize_url: string; state: string }>(
       `/v1/orgs/${encodeURIComponent(slug)}/connectors/oauth/start`,
