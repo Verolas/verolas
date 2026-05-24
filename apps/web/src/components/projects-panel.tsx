@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, type Discipline, type Project, projectsApi } from "@/lib/api";
+import { ApiError, type Discipline, type Project, orgsApi } from "@/lib/api";
 
 const DISCIPLINES: Discipline[] = [
   "structural",
@@ -28,7 +28,7 @@ type LoadState =
   | { kind: "ready"; projects: Project[] }
   | { kind: "error"; status: number; detail: string };
 
-export function ProjectsPanel() {
+export function ProjectsPanel({ orgSlug }: { orgSlug: string }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -36,14 +36,10 @@ export function ProjectsPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void refresh();
-  }, []);
-
-  async function refresh(): Promise<void> {
+  const refresh = useCallback(async (): Promise<void> => {
     setState({ kind: "loading" });
     try {
-      const projects = await projectsApi.list();
+      const projects = await orgsApi.listProjects(orgSlug);
       setState({ kind: "ready", projects });
     } catch (err) {
       if (err instanceof ApiError) {
@@ -52,14 +48,18 @@ export function ProjectsPanel() {
         setState({ kind: "error", status: 0, detail: String(err) });
       }
     }
-  }
+  }, [orgSlug]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   async function handleCreate(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setFormError(null);
     setSubmitting(true);
     try {
-      await projectsApi.create(name, discipline);
+      await orgsApi.createProject(orgSlug, name, discipline);
       setName("");
       setDiscipline("structural");
       setShowForm(false);

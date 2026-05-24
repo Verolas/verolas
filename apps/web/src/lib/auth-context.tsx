@@ -3,10 +3,11 @@
 /**
  * Browser-side auth context.
  *
- * Holds the current bearer token + identity in React state and mirrors
- * it to sessionStorage so a tab refresh keeps the user signed in. The
- * API client reads the token through `setApiTokenGetter` so server-
- * rendered code never sees it.
+ * Owns the bearer token + identity in React state and mirrors it to
+ * sessionStorage so a tab refresh keeps the user signed in. After the
+ * token is loaded it fetches /v1/me so consumers know which org(s) the
+ * user belongs to. The API client reads the token through
+ * `setApiTokenGetter` so server-rendered code never sees it.
  */
 
 import {
@@ -15,11 +16,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { setApiTokenGetter } from "./api";
+import { meApi, setApiTokenGetter, type Me } from "./api";
 import { buildAuthorizationUrl } from "./oidc/client";
 import {
   clearTokens,
@@ -31,17 +33,25 @@ import {
 
 interface AuthContextValue {
   tokens: StoredTokens | null;
+  me: Me | null;
   isLoading: boolean;
+  isLoadingMe: boolean;
+  meError: string | null;
   signIn: (postLoginPath?: string) => Promise<void>;
   signOut: () => void;
   setTokens: (tokens: StoredTokens) => void;
+  refreshMe: () => Promise<Me | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokensState] = useState<StoredTokens | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMe, setIsLoadingMe] = useState(false);
+  const [meError, setMeError] = useState<string | null>(null);
+  const tokensRef = useRef<StoredTokens | null>(null);
 
   useEffect(() => {
     setTokensState(readTokens());
@@ -49,9 +59,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setApiTokenGetter(() => tokens?.accessToken ?? null);
-    return () => setApiTokenGetter(() => null);
+    tokensRef.current = tokens;
+    setApiTokenGetter(() => tokensRef.current?.accessToken ?? null);
   }, [tokens]);
+
+  const refreshMe = useCallback(async (): Promise<Me | null> => {
+    if (!tokensRef.current) {
+      setMe(null);
+      return null;
+    }
+    setIsLoadingMe(true);
+    setMeError(null);
+    try {
+      const next = await meApi.get();
+      setMe(next);
+      return next;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setMeError(message);
+      setMe(null);
+      return null;
+    } finally {
+      setIsLoadingMe(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tokens) {
+      void refreshMe();
+    } else {
+      setMe(null);
+      setMeError(null);
+    }
+  }, [tokens, refreshMe]);
 
   const signIn = useCallback(async (postLoginPath?: string) => {
     if (postLoginPath) writePostLoginRedirect(postLoginPath);
@@ -62,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     clearTokens();
     setTokensState(null);
+    setMe(null);
     window.location.assign("/login");
   }, []);
 
@@ -71,8 +112,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ tokens, isLoading, signIn, signOut, setTokens }),
-    [tokens, isLoading, signIn, signOut, setTokens],
+    () => ({
+      tokens,
+      me,
+      isLoading,
+      isLoadingMe,
+      meError,
+      signIn,
+      signOut,
+      setTokens,
+      refreshMe,
+    }),
+    [tokens, me, isLoading, isLoadingMe, meError, signIn, signOut, setTokens, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
