@@ -1,17 +1,19 @@
 @import "tailwindcss";
 
-/* Verolas design tokens.
+/* Verolas tokens, modelled on the Supabase studio palette.
  *
- * Light theme: warm off-white canvas, deep navy ink, brand blue as
- * primary accent. Stripe-dashboard inspired — hairline borders, dense
- * hierarchy, mono accents for metadata.
+ * Neutral-driven: off-white canvas + surface + elevated, hairline borders
+ * around 1px #ECECEC, near-black ink #1F1F1F. The brand colour is the
+ * deep Verolas blue used as the single accent (button fills, active nav
+ * pills, focus ring). Discipline pills inherit currentColor.
  *
- * Dark theme: deep navy canvas, near-white ink, brand blue brightened
- * for AA contrast on dark. Toggled via data-theme="dark" on <html>.
+ * Dark theme mirrors the Supabase studio dark palette: a near-black
+ * canvas with a very subtle warm tint, a 1px hairline #2A2A2A, and a
+ * brightened brand blue so it stays AA on the dark surface.
  */
 
 @theme {
-  /* Brand */
+  /* Brand ramp */
   --color-brand-50: #eef3fb;
   --color-brand-100: #d8e2f3;
   --color-brand-200: #b3c4e7;
@@ -23,32 +25,34 @@
   --color-brand-800: #0c1f3f;
   --color-brand-900: #07142a;
 
-  /* Semantic — set per theme via :root + [data-theme="dark"] */
-  --color-background: #f6f9fc;
+  /* Light theme defaults */
+  --color-background: #fcfcfc;
   --color-surface: #ffffff;
-  --color-surface-elevated: #fbfcfe;
-  --color-foreground: #0a2540;
-  --color-muted: #f1f4f9;
-  --color-muted-foreground: #5b6b85;
-  --color-border: #e3e8ef;
-  --color-border-strong: #d2dae5;
-  --color-input: #e3e8ef;
-  --color-ring: #4c7cd6;
+  --color-surface-elevated: #ffffff;
+  --color-surface-hover: #f6f6f6;
+  --color-foreground: #1f1f1f;
+  --color-foreground-light: #3d3d3d;
+  --color-muted: #f4f4f4;
+  --color-muted-foreground: #6b6b6b;
+  --color-border: #ececec;
+  --color-border-strong: #d8d8d8;
+  --color-input: #ececec;
+  --color-ring: #2c5cb0;
   --color-primary: #1a3d80;
   --color-primary-hover: #122c5c;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #ffffff;
-  --color-secondary-foreground: #0a2540;
-  --color-accent: #eef3fb;
-  --color-accent-foreground: #122c5c;
+  --color-secondary: #f4f4f4;
+  --color-secondary-foreground: #1f1f1f;
+  --color-accent: #f4f4f4;
+  --color-accent-foreground: #1f1f1f;
   --color-destructive: #b91c1c;
   --color-destructive-foreground: #ffffff;
-  --color-success: #047857;
+  --color-success: #2e7d32;
   --color-success-foreground: #ffffff;
   --color-warning: #b45309;
   --color-warning-foreground: #ffffff;
 
-  /* Discipline palette — used by pills, matched in light + dark */
+  /* Discipline palette */
   --color-discipline-structural: #2c5cb0;
   --color-discipline-geotech: #92400e;
   --color-discipline-water: #0e7490;
@@ -56,47 +60,46 @@
   --color-discipline-review: #047857;
   --color-discipline-practice: #be185d;
 
-  /* Radii — sharper than shadcn defaults; matches Stripe dashboard */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-xl: 10px;
 
-  /* Elevation — soft, low-blur, navy-tinted */
-  --shadow-xs: 0 1px 2px rgba(10, 37, 64, 0.05);
-  --shadow-sm: 0 1px 3px rgba(10, 37, 64, 0.06), 0 1px 2px rgba(10, 37, 64, 0.04);
-  --shadow-md: 0 4px 12px -2px rgba(10, 37, 64, 0.08), 0 2px 4px rgba(10, 37, 64, 0.04);
-  --shadow-lg: 0 14px 28px -6px rgba(10, 37, 64, 0.12), 0 8px 16px -4px rgba(10, 37, 64, 0.06);
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 28px -6px rgba(0, 0, 0, 0.12), 0 8px 16px -4px rgba(0, 0, 0, 0.06);
 
-  /* Type ramps */
   --font-sans: var(--font-ibm-plex-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 [data-theme="dark"] {
-  --color-background: #0a0f1c;
-  --color-surface: #0f172a;
-  --color-surface-elevated: #131c33;
-  --color-foreground: #e6ebf2;
-  --color-muted: #131c33;
-  --color-muted-foreground: #8d9bb5;
-  --color-border: #1f2940;
-  --color-border-strong: #2a3654;
-  --color-input: #1f2940;
-  --color-ring: #6691e3;
+  --color-background: #181818;
+  --color-surface: #1c1c1c;
+  --color-surface-elevated: #232323;
+  --color-surface-hover: #242424;
+  --color-foreground: #ededed;
+  --color-foreground-light: #c4c4c4;
+  --color-muted: #232323;
+  --color-muted-foreground: #8b8b8b;
+  --color-border: #2a2a2a;
+  --color-border-strong: #353535;
+  --color-input: #2a2a2a;
+  --color-ring: #4c7cd6;
   --color-primary: #4c7cd6;
   --color-primary-hover: #6691e3;
-  --color-primary-foreground: #0a0f1c;
-  --color-secondary: #131c33;
-  --color-secondary-foreground: #e6ebf2;
-  --color-accent: #1a253f;
-  --color-accent-foreground: #b3c4e7;
+  --color-primary-foreground: #0a0a0a;
+  --color-secondary: #232323;
+  --color-secondary-foreground: #ededed;
+  --color-accent: #232323;
+  --color-accent-foreground: #ededed;
   --color-destructive: #f87171;
-  --color-destructive-foreground: #0a0f1c;
-  --color-success: #34d399;
-  --color-success-foreground: #0a0f1c;
+  --color-destructive-foreground: #181818;
+  --color-success: #4ade80;
+  --color-success-foreground: #181818;
   --color-warning: #fbbf24;
-  --color-warning-foreground: #0a0f1c;
+  --color-warning-foreground: #181818;
 
   --color-discipline-structural: #7d9bd2;
   --color-discipline-geotech: #f59e0b;
@@ -105,10 +108,10 @@
   --color-discipline-review: #34d399;
   --color-discipline-practice: #f472b6;
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 14px 28px -6px rgba(0, 0, 0, 0.6), 0 8px 16px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 28px -6px rgba(0, 0, 0, 0.7), 0 8px 16px -4px rgba(0, 0, 0, 0.3);
 }
 
 @layer base {
@@ -121,12 +124,13 @@
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "ss01", "cv05", "cv11";
   }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
   }
   code,
   pre,
@@ -137,50 +141,78 @@
   }
   *:focus-visible {
     outline: 2px solid var(--color-ring);
-    outline-offset: 2px;
-  }
-  hr {
-    border-color: var(--color-border);
+    outline-offset: 1px;
+    border-radius: 4px;
   }
 }
 
 @layer components {
-  /* Discipline pill */
+  /* Tiny uppercase plan / status badge: "FREE", "PRODUCTION", "BETA" */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 14px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+  }
+  .badge[data-tone="warning"] {
+    color: var(--color-warning);
+    border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  }
+  .badge[data-tone="success"] {
+    color: var(--color-success);
+    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+    background: color-mix(in srgb, var(--color-success) 8%, transparent);
+  }
+
+  /* Keyboard shortcut hint pill inside tooltips ("G then P") */
+  .kbd {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-muted-foreground);
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+  }
+
+  /* Discipline pill (kept from previous pass) */
   .pill {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 8px;
-    font-size: 11px;
+    padding: 1px 7px;
+    font-size: 10px;
     font-weight: 600;
-    line-height: 18px;
-    letter-spacing: 0.02em;
+    line-height: 16px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     border-radius: 999px;
     border: 1px solid currentColor;
     color: var(--color-muted-foreground);
     background: transparent;
   }
-  .pill[data-discipline="structural"] {
-    color: var(--color-discipline-structural);
-  }
-  .pill[data-discipline="geotech"] {
-    color: var(--color-discipline-geotech);
-  }
-  .pill[data-discipline="water"] {
-    color: var(--color-discipline-water);
-  }
-  .pill[data-discipline="transport"] {
-    color: var(--color-discipline-transport);
-  }
-  .pill[data-discipline="review"] {
-    color: var(--color-discipline-review);
-  }
-  .pill[data-discipline="practice"] {
-    color: var(--color-discipline-practice);
-  }
+  .pill[data-discipline="structural"] { color: var(--color-discipline-structural); }
+  .pill[data-discipline="geotech"] { color: var(--color-discipline-geotech); }
+  .pill[data-discipline="water"] { color: var(--color-discipline-water); }
+  .pill[data-discipline="transport"] { color: var(--color-discipline-transport); }
+  .pill[data-discipline="review"] { color: var(--color-discipline-review); }
+  .pill[data-discipline="practice"] { color: var(--color-discipline-practice); }
 
-  /* Status dot used by table rows */
+  /* Status dot */
   .status-dot {
     display: inline-block;
     width: 6px;
@@ -188,27 +220,20 @@
     border-radius: 999px;
     background: var(--color-muted-foreground);
   }
-  .status-dot[data-status="active"] {
-    background: var(--color-success);
-  }
-  .status-dot[data-status="archived"] {
-    background: var(--color-muted-foreground);
-  }
-  .status-dot[data-status="deleted"] {
-    background: var(--color-destructive);
-  }
+  .status-dot[data-status="active"] { background: var(--color-success); }
+  .status-dot[data-status="archived"] { background: var(--color-muted-foreground); }
+  .status-dot[data-status="deleted"] { background: var(--color-destructive); }
 
-  /* Segmented tabs (All / Active / Archived). */
+  /* Slim segmented control */
   .segmented {
     display: inline-flex;
-    padding: 3px;
+    padding: 2px;
     border: 1px solid var(--color-border);
     border-radius: 6px;
     background: var(--color-muted);
-    gap: 0;
   }
   .segmented > button {
-    padding: 4px 12px;
+    padding: 3px 10px;
     font-size: 12px;
     font-weight: 500;
     color: var(--color-muted-foreground);
@@ -218,9 +243,7 @@
     cursor: pointer;
     transition: background 0.12s, color 0.12s;
   }
-  .segmented > button:hover {
-    color: var(--color-foreground);
-  }
+  .segmented > button:hover { color: var(--color-foreground); }
   .segmented > button[aria-pressed="true"] {
     background: var(--color-surface);
     color: var(--color-foreground);
