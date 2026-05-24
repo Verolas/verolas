@@ -42,8 +42,8 @@ from verolas_api.connector_oauth import oauth_config
 from verolas_api.connectors import lookup
 from verolas_api.crypto import decrypt_credentials, encrypt_credentials
 from verolas_api.dependencies import CurrentAuth
-from verolas_api.dependencies.bootstrap import BootstrapConn
 from verolas_api.dependencies.org import DbOrgConn
+from verolas_api.dependencies.public_db import PublicConn
 from verolas_api.middleware import sla_tier
 
 oauth_router = APIRouter(prefix="/orgs/{org_slug}/connectors/oauth", tags=["connectors"])
@@ -165,7 +165,7 @@ async def oauth_start(
 @callback_router.get("/callback")
 @sla_tier(2)
 async def oauth_callback(
-    conn: BootstrapConn,
+    conn: PublicConn,
     request: Request,
     state: str,
     code: str | None = None,
