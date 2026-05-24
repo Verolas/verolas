@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     )
     oidc_audience: str = Field(default="verolas-api", description="Expected aud claim")
     oidc_jwks_cache_ttl_seconds: int = Field(default=600, ge=60)
+    oidc_verify_tls: bool = Field(
+        default=True,
+        description=(
+            "Verify TLS on the JWKS fetch. Disable only inside a trusted network, "
+            "e.g. the dev cluster talking to in-cluster Keycloak via Traefik self-signed."
+        ),
+    )
 
     database_url: str | None = Field(
         default=None,
@@ -47,3 +54,8 @@ class Settings(BaseSettings):
         description="ClamAV daemon host. None disables scan, leaving file status at scanning.",
     )
     clamd_port: int = Field(default=3310, ge=1, le=65535)
+
+    cors_allow_origins: list[str] = Field(
+        default_factory=list,
+        description="Origins allowed to call the API from the browser, e.g. https://app.dev.verolas.com.",
+    )

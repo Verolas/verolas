@@ -1,9 +1,9 @@
 /**
  * Thin client for the Verolas API.
  *
- * The OIDC PKCE flow lands in a follow up workstream. Today this module
- * just reads the API base URL from the public env and forwards a bearer
- * token if one is in localStorage. Calls return parsed JSON or throw.
+ * The bearer token is supplied by the auth context via `setApiTokenGetter`.
+ * Calls return parsed JSON or throw `ApiError`. Server side rendering
+ * sees no token; this client is expected to run in the browser.
  */
 
 const BASE_URL =
@@ -11,9 +11,12 @@ const BASE_URL =
     ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "")
     : process.env.NEXT_PUBLIC_API_BASE_URL) ?? "https://api.dev.verolas.com";
 
-function getBearerToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("verolas_access_token");
+type TokenGetter = () => string | null;
+
+let tokenGetter: TokenGetter = () => null;
+
+export function setApiTokenGetter(getter: TokenGetter): void {
+  tokenGetter = getter;
 }
 
 export class ApiError extends Error {
@@ -30,7 +33,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
   if (init?.body) headers.set("Content-Type", "application/json");
-  const token = getBearerToken();
+  const token = tokenGetter();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   const text = await response.text();
