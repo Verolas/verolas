@@ -202,12 +202,42 @@ div.pf-c-form-control,
   border: 1px solid var(--verolas-border);
   border-radius: 0 8px 8px 0;
   font-weight: 400;
+  cursor: pointer;
 }
 
 .pf-v5-c-input-group > .pf-v5-c-button:hover {
   background: var(--verolas-soft);
   color: var(--verolas-deep);
   border-color: var(--verolas-bright);
+}
+
+/* The keycloak.v2 password toggle ships a Font Awesome <i> as the only
+ * child of the button. Our theme does not bundle the FA font file, so
+ * the glyph slot is empty and the button reads as a grey square.
+ * Render an SVG eye / eye-with-slash through CSS mask-image so the icon
+ * inherits currentColor and stays crisp at any size. */
+.pf-v5-c-input-group > button > i,
+.pf-v5-c-input-group > .pf-v5-c-button > i {
+  display: block;
+  width: 18px;
+  height: 18px;
+  font-size: 0;
+  line-height: 0;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+          mask-position: center;
+  -webkit-mask-size: contain;
+          mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z'/><circle cx='12' cy='12' r='3'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z'/><circle cx='12' cy='12' r='3'/></svg>");
+}
+
+.pf-v5-c-input-group > button > i.fa-eye-slash,
+.pf-v5-c-input-group > .pf-v5-c-button > i.fa-eye-slash {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94'/><path d='M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19'/><path d='M14.12 14.12A3 3 0 1 1 9.88 9.88'/><line x1='1' y1='1' x2='23' y2='23'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94'/><path d='M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19'/><path d='M14.12 14.12A3 3 0 1 1 9.88 9.88'/><line x1='1' y1='1' x2='23' y2='23'/></svg>");
 }
 
 /* Helper text and password strength meter hooks that otherwise render as
