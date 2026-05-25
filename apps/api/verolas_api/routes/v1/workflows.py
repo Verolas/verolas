@@ -441,3 +441,64 @@ async def cancel_workflow_run(
         )
     except RunNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+class WorkflowArtifactUrl(BaseModel):
+    """Presigned download URL for a workflow-run artifact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    storage_key: str
+    url: str
+    method: str
+    expires_in: int
+
+
+@project_workflow_router.get(
+    "/runs/{run_id}/artifact",
+    response_model=WorkflowArtifactUrl,
+)
+@sla_tier(1)
+async def get_workflow_run_artifact_url(
+    request: Request,
+    project_id: Annotated[str, Path()],
+    run_id: Annotated[UUID, Path()],
+    storage_key: Annotated[str, Query(min_length=1, max_length=512)],
+    deps: DbOrgConn,
+) -> WorkflowArtifactUrl:
+    """Return a short-lived presigned download URL for a run artifact.
+
+    Adapters write artifacts under
+    `workflow-runs/{org_id}/{run_id}/...`. We validate the key has
+    that prefix so a caller cannot use this endpoint to fetch
+    unrelated objects. The run is also loaded to confirm it belongs
+    to the caller's org (RLS enforces this on the SELECT).
+    """
+    conn, ctx = deps
+    _ = _project_id(project_id)
+    try:
+        await runs_service.get_run(conn, run_id=run_id)
+    except RunNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    expected_prefix = f"workflow-runs/{ctx.organization_id}/{run_id}/"
+    if not storage_key.startswith(expected_prefix):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="storage_key does not belong to this run.",
+        )
+
+    storage = _storage(request)
+    if storage is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service not configured.",
+        )
+
+    presigned = storage.presign_download(key=storage_key)
+    return WorkflowArtifactUrl(
+        storage_key=storage_key,
+        url=presigned.url,
+        method=presigned.method,
+        expires_in=presigned.expires_in,
+    )

@@ -34,14 +34,16 @@ from verolas_api.workflow.adapters.base import (
     ArtifactRef,
     NodeAdapter,
 )
-from verolas_api.workflow.origin.geometry import Geometry
+from verolas_api.workflow.origin.geometry import Floor, Geometry
 from verolas_api.workflow.origin.parse_dxf import parse_dxf
 from verolas_api.workflow.origin.parse_ifc import parse_ifc
 from verolas_api.workflow.origin.quality import QualityReport, run_all_checks
+from verolas_api.workflow.origin.render_svg import render_floor_svg
 
 logger = logging.getLogger(__name__)
 
 _JSON_CONTENT_TYPE = "application/json"
+_SVG_CONTENT_TYPE = "image/svg+xml"
 
 
 class OriginFloorParseAdapter(NodeAdapter):
@@ -108,8 +110,16 @@ class OriginFloorParseAdapter(NodeAdapter):
 
         report: QualityReport = await asyncio.to_thread(run_all_checks, geometry)
 
+        # Render each floor to SVG up-front so the architectural-review
+        # gallery has a durable image to display without re-running the
+        # parser. We compute SVGs even when storage is None (tests) so
+        # the in-memory result still surfaces them.
+        svgs: list[tuple[Floor, str]] = await asyncio.to_thread(_render_all_svgs, geometry)
+
         geometry_json = geometry.model_dump_json()
         geometry_key = f"workflow-runs/{ctx.org_id}/{ctx.run_id}/origin/geometry.json"
+        artifacts: list[ArtifactRef] = []
+        floor_svgs_out: list[dict[str, Any]] = []
 
         if ctx.storage is not None:
             try:
@@ -128,19 +138,65 @@ class OriginFloorParseAdapter(NodeAdapter):
                     outputs={},
                     error=f"Storing parsed geometry failed: {exc}",
                 )
-
-        artifacts = (
-            [
+            artifacts.append(
                 ArtifactRef(
                     storage_key=geometry_key,
                     content_type=_JSON_CONTENT_TYPE,
                     size_bytes=len(geometry_json.encode("utf-8")),
                     label="Parsed geometry",
                 )
-            ]
-            if ctx.storage is not None
-            else []
-        )
+            )
+
+            for floor, svg in svgs:
+                svg_key = f"workflow-runs/{ctx.org_id}/{ctx.run_id}/origin/floor_{floor.key}.svg"
+                svg_bytes = svg.encode("utf-8")
+                try:
+                    await asyncio.to_thread(
+                        ctx.storage.put_bytes,
+                        key=svg_key,
+                        body=svg_bytes,
+                        content_type=_SVG_CONTENT_TYPE,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "origin_floor_parse.svg_upload_error",
+                        extra={"run_id": str(ctx.run_id), "svg_key": svg_key},
+                    )
+                    return AdapterResult(
+                        outputs={},
+                        error=f"Storing floor SVG failed: {exc}",
+                    )
+                artifacts.append(
+                    ArtifactRef(
+                        storage_key=svg_key,
+                        content_type=_SVG_CONTENT_TYPE,
+                        size_bytes=len(svg_bytes),
+                        label=f"Floor: {floor.name}",
+                    )
+                )
+                floor_svgs_out.append(
+                    {
+                        "floor_key": floor.key,
+                        "name": floor.name,
+                        "is_roof": floor.is_roof,
+                        "svg_key": svg_key,
+                        "size_bytes": len(svg_bytes),
+                    }
+                )
+        else:
+            # Storage off: still report the rendered SVGs inline so
+            # tests and dev-without-S3 can introspect them.
+            for floor, svg in svgs:
+                floor_svgs_out.append(
+                    {
+                        "floor_key": floor.key,
+                        "name": floor.name,
+                        "is_roof": floor.is_roof,
+                        "svg_key": "",
+                        "svg_inline": svg,
+                        "size_bytes": len(svg.encode("utf-8")),
+                    }
+                )
 
         return AdapterResult(
             outputs={
@@ -154,6 +210,7 @@ class OriginFloorParseAdapter(NodeAdapter):
                     "slab_count": geometry.slab_count,
                     "floor_names": [f.name for f in geometry.floors],
                 },
+                "floor_svgs": floor_svgs_out,
                 "quality_report": report.model_dump(),
                 "parser_notes": list(geometry.parser_notes),
                 "parsed_at": datetime.now(UTC).isoformat(),
@@ -174,6 +231,11 @@ def _parse(content: bytes, fmt: str) -> Geometry:
     if fmt == "ifc":
         return parse_ifc(content)
     raise ValueError(f"unsupported format: {fmt}")
+
+
+def _render_all_svgs(geometry: Geometry) -> list[tuple[Floor, str]]:
+    """Render every floor in `geometry` to SVG, preserving floor order."""
+    return [(floor, render_floor_svg(floor)) for floor in geometry.floors]
 
 
 register_adapter(OriginFloorParseAdapter())
