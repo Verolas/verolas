@@ -102,14 +102,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy scan ${{ matrix.name }}
+      # Policy: BLOCK on CRITICAL, REPORT on HIGH.
+      #
+      # The world publishes new HIGH CVEs daily, and many sit in upstream base
+      # images for days before vendors rebuild. Blocking on HIGH means every
+      # build is a coin flip on whether some unrelated dependency just got a
+      # new advisory. We still want HIGH visible, so the SARIF step uploads
+      # them to the Security tab; the enforcement step blocks only CRITICAL.
+
+      - name: Trivy report (CRITICAL + HIGH) for ${{ matrix.name }}
         if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-${{ matrix.name }}.sarif
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
           vuln-type: os,library
@@ -120,6 +128,18 @@ jobs:
         with:
           sarif_file: trivy-${{ matrix.name }}.sarif
           category: trivy-${{ matrix.name }}
+
+      - name: Trivy enforce (CRITICAL only) for ${{ matrix.name }}
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL
+          vuln-type: os,library
+          skip-setup-trivy: true
 
       - name: Install Cosign
         if: github.event_name != 'pull_request'
