@@ -213,9 +213,7 @@ def upgrade() -> None:
         sa.Column(
             "template_version_id",
             sa.dialects.postgresql.UUID(as_uuid=True),
-            sa.ForeignKey(
-                "workflow_template_versions.id", ondelete="RESTRICT"
-            ),
+            sa.ForeignKey("workflow_template_versions.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
@@ -360,13 +358,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.UniqueConstraint(
-            "run_id", "node_key", name="workflow_run_nodes_unique_node"
-        ),
+        sa.UniqueConstraint("run_id", "node_key", name="workflow_run_nodes_unique_node"),
     )
-    op.create_index(
-        "workflow_run_nodes_run_idx", "workflow_run_nodes", ["run_id"]
-    )
+    op.create_index("workflow_run_nodes_run_idx", "workflow_run_nodes", ["run_id"])
     op.create_index(
         "workflow_run_nodes_status_idx",
         "workflow_run_nodes",
@@ -479,12 +473,8 @@ def upgrade() -> None:
 
     # workflow_template_versions: visibility follows the parent template.
     # A version is readable if its template row is readable.
-    op.execute(
-        "ALTER TABLE workflow_template_versions ENABLE ROW LEVEL SECURITY"
-    )
-    op.execute(
-        "ALTER TABLE workflow_template_versions FORCE ROW LEVEL SECURITY"
-    )
+    op.execute("ALTER TABLE workflow_template_versions ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE workflow_template_versions FORCE ROW LEVEL SECURITY")
     op.execute(
         "CREATE POLICY workflow_template_versions_visible ON "
         "workflow_template_versions FOR SELECT USING ("
@@ -657,24 +647,18 @@ def downgrade() -> None:
         op.execute(f"DROP TRIGGER IF EXISTS {table}_updated_at ON {table}")
 
     op.execute(
-        "DROP POLICY IF EXISTS workflow_template_versions_visible "
-        "ON workflow_template_versions"
+        "DROP POLICY IF EXISTS workflow_template_versions_visible ON workflow_template_versions"
     )
     op.execute(
-        "DROP POLICY IF EXISTS workflow_template_versions_insert "
-        "ON workflow_template_versions"
+        "DROP POLICY IF EXISTS workflow_template_versions_insert ON workflow_template_versions"
     )
     op.execute(
-        "DROP POLICY IF EXISTS workflow_template_versions_update "
-        "ON workflow_template_versions"
+        "DROP POLICY IF EXISTS workflow_template_versions_update ON workflow_template_versions"
     )
     op.execute(
-        "DROP POLICY IF EXISTS workflow_template_versions_delete "
-        "ON workflow_template_versions"
+        "DROP POLICY IF EXISTS workflow_template_versions_delete ON workflow_template_versions"
     )
-    op.execute(
-        "ALTER TABLE workflow_template_versions DISABLE ROW LEVEL SECURITY"
-    )
+    op.execute("ALTER TABLE workflow_template_versions DISABLE ROW LEVEL SECURITY")
 
     for table in (
         "workflow_templates",
@@ -682,18 +666,10 @@ def downgrade() -> None:
         "workflow_run_nodes",
         "workflow_run_events",
     ):
-        op.execute(
-            f"DROP POLICY IF EXISTS {table}_visible_to_org ON {table}"
-        )
-        op.execute(
-            f"DROP POLICY IF EXISTS {table}_insert_in_org ON {table}"
-        )
-        op.execute(
-            f"DROP POLICY IF EXISTS {table}_update_in_org ON {table}"
-        )
-        op.execute(
-            f"DROP POLICY IF EXISTS {table}_delete_in_org ON {table}"
-        )
+        op.execute(f"DROP POLICY IF EXISTS {table}_visible_to_org ON {table}")
+        op.execute(f"DROP POLICY IF EXISTS {table}_insert_in_org ON {table}")
+        op.execute(f"DROP POLICY IF EXISTS {table}_update_in_org ON {table}")
+        op.execute(f"DROP POLICY IF EXISTS {table}_delete_in_org ON {table}")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
 
     op.execute("DROP INDEX IF EXISTS workflow_run_events_run_idx")
@@ -708,9 +684,7 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS workflow_runs_org_idx")
     op.drop_table("workflow_runs")
 
-    op.execute(
-        "DROP INDEX IF EXISTS workflow_template_versions_template_idx"
-    )
+    op.execute("DROP INDEX IF EXISTS workflow_template_versions_template_idx")
     op.drop_table("workflow_template_versions")
 
     op.execute("DROP INDEX IF EXISTS workflow_templates_jurisdiction_idx")
