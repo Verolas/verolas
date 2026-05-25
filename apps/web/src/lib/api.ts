@@ -691,7 +691,38 @@ export const workflowsApi = {
       `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/cancel`,
       { method: "POST" },
     ),
+  // Get a short-lived presigned URL for a run artifact (e.g. floor
+  // SVGs from the Origin floor_parse adapter, the sealed PDF, etc.).
+  // The server validates that the storage_key belongs to this run.
+  getArtifactUrl: (
+    slug: string,
+    projectId: string,
+    runId: string,
+    storageKey: string,
+  ) => {
+    const qs = `?storage_key=${encodeURIComponent(storageKey)}`;
+    return request<WorkflowArtifactUrl>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/artifact${qs}`,
+    );
+  },
 };
+
+export interface WorkflowArtifactUrl {
+  storage_key: string;
+  url: string;
+  method: string;
+  expires_in: number;
+}
+
+// Per-floor SVG entry on the Origin floor_parse node's outputs.
+export interface FloorSvgEntry {
+  floor_key: string;
+  name: string;
+  is_roof: boolean;
+  svg_key: string;
+  size_bytes: number;
+  svg_inline?: string;
+}
 
 // Workflow documents (stage 4 backend). A document is a project-scoped
 // editable instance of a workflow graph. Runs can be created from a

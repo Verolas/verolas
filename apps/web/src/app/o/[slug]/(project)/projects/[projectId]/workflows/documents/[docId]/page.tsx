@@ -940,6 +940,9 @@ function DocumentEditor({ params }: Props) {
         <NodeDetailModal
           flowNode={selectedFlowNode}
           runNode={selectedRunNode}
+          activeRun={activeRun}
+          orgSlug={resolved?.slug ?? null}
+          projectId={resolved?.projectId ?? null}
           busy={busy}
           note={noteDraft}
           onNoteChange={setNoteDraft}
@@ -1110,6 +1113,9 @@ function Sidebar({
 function NodeDetailModal({
   flowNode,
   runNode,
+  activeRun,
+  orgSlug,
+  projectId,
   busy,
   note,
   onNoteChange,
@@ -1122,6 +1128,9 @@ function NodeDetailModal({
 }: {
   flowNode: FlowNode;
   runNode: WorkflowRunNode | null;
+  activeRun: WorkflowRun | null;
+  orgSlug: string | null;
+  projectId: string | null;
   busy: boolean;
   note: string;
   onNoteChange: (value: string) => void;
@@ -1215,12 +1224,12 @@ function NodeDetailModal({
             </p>
           )}
 
-          <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
-            The node-specific workbench (e.g. the structural concept generator for
-            Verolas Origin, the calc workbench for an Analysis node) opens here in a
-            later stage. For now, this overlay surfaces run-time actions plus basic
-            edit controls.
-          </div>
+          <NodeWorkbench
+            flowNode={flowNode}
+            activeRun={activeRun}
+            orgSlug={orgSlug}
+            projectId={projectId}
+          />
 
           {showManualAction && (
             <div>
@@ -1287,6 +1296,234 @@ function NodeDetailModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// NodeWorkbench dispatches per-node-key custom UI. Today only the
+// Origin architectural_review node has a workbench (floor-preview
+// gallery rendered from the upstream floor_parse outputs). Other
+// nodes fall back to a brief placeholder.
+function NodeWorkbench({
+  flowNode,
+  activeRun,
+  orgSlug,
+  projectId,
+}: {
+  flowNode: FlowNode;
+  activeRun: WorkflowRun | null;
+  orgSlug: string | null;
+  projectId: string | null;
+}) {
+  if (flowNode.id === "architectural_review") {
+    return (
+      <OriginFloorGallery
+        activeRun={activeRun}
+        orgSlug={orgSlug}
+        projectId={projectId}
+      />
+    );
+  }
+  return (
+    <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+      A node-specific workbench will live here. For Origin floor parse
+      review, open the architectural_review node to see the parsed
+      floors.
+    </div>
+  );
+}
+
+interface ParsedFloorEntry {
+  floor_key: string;
+  name: string;
+  is_roof: boolean;
+  svg_key: string;
+  svg_inline?: string;
+}
+
+interface FloorParseOutputs {
+  geometry_summary?: {
+    source_format?: string;
+    floor_count?: number;
+    wall_count?: number;
+    column_count?: number;
+    opening_count?: number;
+    slab_count?: number;
+    floor_names?: string[];
+  };
+  floor_svgs?: ParsedFloorEntry[];
+  quality_report?: {
+    checks: Array<{
+      name: string;
+      status: "ok" | "warning" | "error";
+      message: string;
+    }>;
+  };
+  parser_notes?: string[];
+  parsed_at?: string;
+}
+
+function OriginFloorGallery({
+  activeRun,
+  orgSlug,
+  projectId,
+}: {
+  activeRun: WorkflowRun | null;
+  orgSlug: string | null;
+  projectId: string | null;
+}) {
+  const floorParseNode = useMemo(
+    () => activeRun?.nodes.find((n) => n.node_key === "floor_parse") ?? null,
+    [activeRun],
+  );
+
+  const outputs = floorParseNode?.outputs as FloorParseOutputs | undefined;
+  const floors = outputs?.floor_svgs ?? [];
+  const summary = outputs?.geometry_summary;
+  const report = outputs?.quality_report;
+
+  if (!floorParseNode) {
+    return (
+      <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+        Start a run from this workflow to parse the architect CAD; the
+        parsed floors will appear here for review.
+      </div>
+    );
+  }
+  if (floorParseNode.status !== "completed") {
+    return (
+      <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+        Floor parse status: <span className="uppercase">{floorParseNode.status}</span>.{" "}
+        {floorParseNode.error ?? "Waiting for the parser to finish."}
+      </div>
+    );
+  }
+  if (floors.length === 0) {
+    return (
+      <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+        Floor parse completed but produced no floors. Re-upload the CAD with
+        per-floor layouts (DXF) or building storeys (IFC).
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {summary && (
+        <div className="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted-foreground">
+          Parsed from <span className="uppercase">{summary.source_format}</span>:{" "}
+          {summary.floor_count} floors · {summary.wall_count} walls ·{" "}
+          {summary.column_count} columns · {summary.opening_count} openings
+        </div>
+      )}
+
+      {report && (
+        <div className="space-y-1">
+          {report.checks.map((c) => (
+            <div
+              key={c.name}
+              className={`flex items-start gap-2 rounded border px-2.5 py-1.5 text-[11px] ${
+                c.status === "ok"
+                  ? "border-emerald-300/50 bg-emerald-50/40 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+                  : c.status === "warning"
+                    ? "border-amber-300/60 bg-amber-50/50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                    : "border-destructive/40 bg-destructive/10 text-destructive"
+              }`}
+            >
+              <span className="font-medium capitalize">{c.name.replace(/_/g, " ")}</span>
+              <span>·</span>
+              <span className="flex-1">{c.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {floors.map((entry) => (
+          <FloorPreviewCard
+            key={entry.floor_key}
+            entry={entry}
+            runId={activeRun?.id ?? null}
+            orgSlug={orgSlug}
+            projectId={projectId}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FloorPreviewCard({
+  entry,
+  runId,
+  orgSlug,
+  projectId,
+}: {
+  entry: ParsedFloorEntry;
+  runId: string | null;
+  orgSlug: string | null;
+  projectId: string | null;
+}) {
+  const [svgUrl, setSvgUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (entry.svg_inline) {
+        setSvgUrl(
+          `data:image/svg+xml;utf8,${encodeURIComponent(entry.svg_inline)}`,
+        );
+        return;
+      }
+      if (!entry.svg_key || !runId || !orgSlug || !projectId) return;
+      try {
+        const presigned = await workflowsApi.getArtifactUrl(
+          orgSlug,
+          projectId,
+          runId,
+          entry.svg_key,
+        );
+        if (!cancelled) setSvgUrl(presigned.url);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.detail : String(err));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.svg_key, entry.svg_inline, runId, orgSlug, projectId]);
+
+  return (
+    <div className="overflow-hidden rounded border border-border bg-background">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-2.5 py-1.5 text-[11px]">
+        <span className="font-medium">{entry.name}</span>
+        {entry.is_roof && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            Roof
+          </span>
+        )}
+      </div>
+      <div className="grid aspect-[4/3] place-items-center bg-surface">
+        {svgUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={svgUrl}
+            alt={`Parsed plan for ${entry.name}`}
+            className="size-full object-contain"
+          />
+        ) : error ? (
+          <span className="px-3 text-[10px] text-destructive">{error}</span>
+        ) : (
+          <Loader2
+            className="size-4 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+        )}
       </div>
     </div>
   );

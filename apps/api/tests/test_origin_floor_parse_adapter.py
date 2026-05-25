@@ -115,12 +115,28 @@ async def test_floor_parse_happy_path_writes_geometry_artifact() -> None:
         "roof_present",
     }
 
-    # An artifact ref should describe the parsed-geometry JSON.
-    assert len(result.artifacts) == 1
-    artifact = result.artifacts[0]
-    assert artifact.storage_key == geometry_key
-    assert artifact.content_type == "application/json"
-    assert artifact.label == "Parsed geometry"
+    # Artifact refs: parsed geometry + one SVG per floor.
+    assert len(result.artifacts) == 3
+    labels = {a.label for a in result.artifacts}
+    assert "Parsed geometry" in labels
+    assert "Floor: Floor 1" in labels
+    assert "Floor: Roof" in labels
+
+    # Each floor SVG should be uploaded under the floor's storage key.
+    svg_keys = [a.storage_key for a in result.artifacts if a.content_type == "image/svg+xml"]
+    assert len(svg_keys) == 2
+    for key in svg_keys:
+        assert key.endswith(".svg")
+        assert key in storage.store
+        assert storage.store[key].startswith(b"<svg")
+
+    # floor_svgs on outputs should map floor names to svg_keys.
+    floor_svgs = result.outputs["floor_svgs"]
+    assert len(floor_svgs) == 2
+    names = {entry["name"] for entry in floor_svgs}
+    assert names == {"Floor 1", "Roof"}
+    for entry in floor_svgs:
+        assert entry["svg_key"].endswith(".svg")
 
 
 @pytest.mark.asyncio
