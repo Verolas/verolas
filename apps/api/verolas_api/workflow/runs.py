@@ -193,17 +193,114 @@ async def create_run(
     return await get_run(conn, run_id=run_id)
 
 
+async def create_run_from_document(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    started_by_user_id: UUID,
+) -> RunView:
+    """Create a run from a project-scoped workflow document.
+
+    The document's current definition is snapshotted onto the run row
+    (definition_snapshot) so the run remains immutable if the document
+    is later edited. No template_version_id is set; the executor reads
+    the snapshot.
+    """
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            SELECT id, definition FROM workflow_documents WHERE id = %s
+            """,
+            (document_id,),
+        )
+        doc_row = await cur.fetchone()
+    if doc_row is None:
+        raise RunNotFound(f"document {document_id} not found")
+    definition = TemplateDefinition.model_validate(doc_row["definition"])
+
+    if not definition.nodes:
+        raise WorkflowError("document has no nodes; nothing to run")
+
+    initial = compute_initial_node_states(definition)
+    definition_payload = json.dumps(definition.model_dump(mode="json"))
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            INSERT INTO workflow_runs (
+                org_id, project_id, document_id, definition_snapshot,
+                status, started_by_user_id, started_at
+            )
+            VALUES (%s, %s, %s, %s::jsonb, 'running', %s, now())
+            RETURNING id, created_at, updated_at, started_at
+            """,
+            (
+                org_id,
+                project_id,
+                document_id,
+                definition_payload,
+                started_by_user_id,
+            ),
+        )
+        run_row = await cur.fetchone()
+        assert run_row is not None
+        run_id = run_row["id"]
+
+        for node_def in definition.nodes:
+            await cur.execute(
+                """
+                INSERT INTO workflow_run_nodes (
+                    org_id, run_id, node_key, kind, status, params
+                )
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    org_id,
+                    run_id,
+                    node_def.key,
+                    node_def.kind.value,
+                    initial[node_def.key].value,
+                    json.dumps(dict(node_def.params)),
+                ),
+            )
+
+        await _emit_event(
+            cur,
+            org_id=org_id,
+            run_id=run_id,
+            node_id=None,
+            event_type="run.started",
+            payload={"document_id": str(document_id)},
+            actor_user_id=started_by_user_id,
+        )
+
+    await _advance_until_blocked(
+        conn, org_id=org_id, run_id=run_id, actor_user_id=started_by_user_id
+    )
+    return await get_run(conn, run_id=run_id)
+
+
 async def get_run(conn: AsyncConnection, run_id: UUID) -> RunView:
-    """Fetch a run with its node list. Raises RunNotFound if missing."""
+    """Fetch a run with its node list. Raises RunNotFound if missing.
+
+    Runs may be rooted in either a Verolas template or a project document.
+    LEFT JOIN both; the route layer resolves the display name from
+    whichever side is populated.
+    """
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
             SELECT r.id, r.project_id, r.template_id, r.template_version_id,
+                   r.document_id,
                    r.status, r.started_by_user_id, r.started_at, r.completed_at,
-                   r.created_at, r.updated_at, t.slug AS template_slug,
-                   t.name AS template_name
+                   r.created_at, r.updated_at,
+                   t.slug AS template_slug, t.name AS template_name,
+                   d.name AS document_name
             FROM workflow_runs r
-            JOIN workflow_templates t ON t.id = r.template_id
+            LEFT JOIN workflow_templates t ON t.id = r.template_id
+            LEFT JOIN workflow_documents d ON d.id = r.document_id
             WHERE r.id = %s
             """,
             (run_id,),
@@ -241,6 +338,7 @@ async def get_run(conn: AsyncConnection, run_id: UUID) -> RunView:
         )
         for row in node_rows
     ]
+    display_name = run_row["document_name"] or run_row["template_name"] or "Workflow run"
     return RunView(
         id=run_row["id"],
         project_id=run_row["project_id"],
@@ -248,6 +346,9 @@ async def get_run(conn: AsyncConnection, run_id: UUID) -> RunView:
         template_version_id=run_row["template_version_id"],
         template_slug=run_row["template_slug"],
         template_name=run_row["template_name"],
+        document_id=run_row["document_id"],
+        document_name=run_row["document_name"],
+        display_name=display_name,
         status=RunStatus(run_row["status"]),
         started_by_user_id=run_row["started_by_user_id"],
         started_at=run_row["started_at"],
@@ -464,20 +565,25 @@ async def _finalize_run_status(
 async def _load_run_state(
     conn: AsyncConnection, run_id: UUID
 ) -> tuple[TemplateDefinition, dict[NodeKey, NodeState]]:
-    """Pull the template definition and per-node runtime state from the DB."""
+    """Pull the workflow definition and per-node runtime state from the DB.
+
+    The definition source depends on the run's root: template-rooted runs
+    use the pinned template version; document-rooted runs use the
+    snapshot taken at run-create time. COALESCE picks whichever is set.
+    """
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            SELECT v.definition
+            SELECT COALESCE(v.definition, r.definition_snapshot) AS definition
             FROM workflow_runs r
-            JOIN workflow_template_versions v
+            LEFT JOIN workflow_template_versions v
               ON v.id = r.template_version_id
             WHERE r.id = %s
             """,
             (run_id,),
         )
         row = await cur.fetchone()
-        if row is None:
+        if row is None or row["definition"] is None:
             raise RunNotFound(f"run {run_id} not found")
         definition = TemplateDefinition.model_validate(row["definition"])
 

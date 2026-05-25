@@ -167,14 +167,22 @@ class RunNodeView(BaseModel):
 
 
 class RunView(BaseModel):
-    """API projection of a workflow_runs row."""
+    """API projection of a workflow_runs row.
+
+    After stage 4, runs can be rooted in either a Verolas template or a
+    project-scoped document. The display name resolves via the source:
+    template.name if template-rooted, document.name if doc-rooted.
+    """
 
     id: UUID
     project_id: UUID
-    template_id: UUID
-    template_version_id: UUID
-    template_slug: str
-    template_name: str
+    template_id: UUID | None = None
+    template_version_id: UUID | None = None
+    template_slug: str | None = None
+    template_name: str | None = None
+    document_id: UUID | None = None
+    document_name: str | None = None
+    display_name: str
     status: RunStatus
     started_by_user_id: UUID | None = None
     started_at: datetime | None = None
@@ -199,5 +207,23 @@ class TemplateView(BaseModel):
     active_version_id: UUID
     node_count: int
     is_global: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentView(BaseModel):
+    """API projection of a workflow_documents row."""
+
+    id: UUID
+    org_id: UUID
+    project_id: UUID
+    folder: str
+    name: str
+    description: str | None
+    source_template_id: UUID | None
+    source_template_version_id: UUID | None
+    definition: TemplateDefinition
+    node_count: int
+    created_by_user_id: UUID | None
     created_at: datetime
     updated_at: datetime
