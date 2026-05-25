@@ -535,3 +535,157 @@ export const runsApi = {
       },
     ),
 };
+
+// Workflow system (stage 1+2 backend).
+//
+// Mirrors the Pydantic schemas in apps/api/verolas_api/workflow/schema.py.
+// Keep these types in sync with the API; the response shapes are stable
+// across template versions because every run pins to one version.
+
+export type WorkflowNodeKind =
+  | "automated"
+  | "gate.review"
+  | "gate.approve"
+  | "gate.signature"
+  | "manual"
+  | "external_wait"
+  | "branch.condition"
+  | "branch.iterate"
+  | "submission"
+  | "notification";
+
+export type WorkflowNodeStatus =
+  | "pending"
+  | "ready"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type WorkflowRunStatus =
+  | "pending"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type WorkflowTemplateSource = "code" | "ui";
+
+export interface WorkflowTemplate {
+  id: string;
+  org_id: string | null;
+  slug: string;
+  name: string;
+  description: string | null;
+  jurisdiction: string | null;
+  project_type: string | null;
+  source: WorkflowTemplateSource;
+  active_version: number;
+  active_version_id: string;
+  node_count: number;
+  is_global: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowRunNode {
+  id: string;
+  node_key: string;
+  kind: WorkflowNodeKind;
+  status: WorkflowNodeStatus;
+  assignee_user_id: string | null;
+  gate_decision: string | null;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  params: Record<string, unknown>;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface WorkflowRun {
+  id: string;
+  project_id: string;
+  template_id: string;
+  template_version_id: string;
+  template_slug: string;
+  template_name: string;
+  status: WorkflowRunStatus;
+  started_by_user_id: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  nodes: WorkflowRunNode[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowGateDecision {
+  decision: "approved" | "rejected";
+  note?: string | null;
+}
+
+export interface WorkflowManualDone {
+  outputs?: Record<string, unknown> | null;
+}
+
+export const workflowsApi = {
+  listTemplates: (slug: string, jurisdiction?: string) => {
+    const qs = jurisdiction
+      ? `?jurisdiction=${encodeURIComponent(jurisdiction)}`
+      : "";
+    return request<WorkflowTemplate[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/workflows/templates${qs}`,
+    );
+  },
+  createRun: (slug: string, projectId: string, templateSlug: string) =>
+    request<WorkflowRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs`,
+      {
+        method: "POST",
+        body: JSON.stringify({ template_slug: templateSlug }),
+      },
+    ),
+  listRuns: (slug: string, projectId: string, limit = 50) =>
+    request<WorkflowRun[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs?limit=${limit}`,
+    ),
+  getRun: (slug: string, projectId: string, runId: string) =>
+    request<WorkflowRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}`,
+    ),
+  advanceGate: (
+    slug: string,
+    projectId: string,
+    runId: string,
+    nodeKey: string,
+    decision: WorkflowGateDecision,
+  ) =>
+    request<WorkflowRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/nodes/${nodeKey}/advance`,
+      {
+        method: "POST",
+        body: JSON.stringify({ gate: decision }),
+      },
+    ),
+  advanceManual: (
+    slug: string,
+    projectId: string,
+    runId: string,
+    nodeKey: string,
+    payload: WorkflowManualDone = {},
+  ) =>
+    request<WorkflowRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/nodes/${nodeKey}/advance`,
+      {
+        method: "POST",
+        body: JSON.stringify({ manual: payload }),
+      },
+    ),
+  cancelRun: (slug: string, projectId: string, runId: string) =>
+    request<WorkflowRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/cancel`,
+      { method: "POST" },
+    ),
+};
