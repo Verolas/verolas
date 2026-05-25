@@ -120,7 +120,6 @@ def upgrade() -> None:
     op.execute("ALTER TABLE workflow_documents ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE workflow_documents FORCE ROW LEVEL SECURITY")
     for action in ("SELECT", "INSERT", "UPDATE", "DELETE"):
-        slug = action.lower()
         if action == "SELECT":
             op.execute(
                 "CREATE POLICY workflow_documents_visible_to_org "
