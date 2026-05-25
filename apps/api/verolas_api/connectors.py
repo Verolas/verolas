@@ -388,7 +388,10 @@ CONNECTORS: dict[str, ConnectorClass] = {
             auth_method="oauth2_pkce",
             blurb="Send transmittals and reviewer requests from Gmail.",
             region_tags=_ALL_REGIONS,
-            scopes=("https://www.googleapis.com/auth/gmail.send",),
+            scopes=(
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/gmail.readonly",
+            ),
             instance_label="Gmail mailbox",
         ),
         ConnectorClass(
