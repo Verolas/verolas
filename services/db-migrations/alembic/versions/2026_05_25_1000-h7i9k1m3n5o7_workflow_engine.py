@@ -40,27 +40,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Enums.
-    op.execute(
-        """
-        CREATE TYPE workflow_template_source AS ENUM ('code', 'ui')
-        """
-    )
-    op.execute(
-        """
-        CREATE TYPE workflow_run_status AS ENUM (
-            'pending', 'running', 'paused', 'completed', 'failed', 'cancelled'
-        )
-        """
-    )
-    op.execute(
-        """
-        CREATE TYPE workflow_node_status AS ENUM (
-            'pending', 'ready', 'running', 'paused', 'completed',
-            'failed', 'skipped'
-        )
-        """
-    )
+    # ENUM types are created implicitly by the first sa.Enum column reference
+    # in each op.create_table below. We tried emitting CREATE TYPE explicitly
+    # with create_type=False on the columns, but alembic / SQLAlchemy ignored
+    # the flag and re-emitted CREATE TYPE on the table, causing a
+    # DuplicateObject error. Letting sa.Enum manage type creation is the
+    # idiomatic alembic path.
 
     # workflow_templates: catalog. Global templates (org_id NULL) are
     # Verolas-authored. Per-org templates are firm-owned forks.
@@ -89,7 +74,6 @@ def upgrade() -> None:
                 "code",
                 "ui",
                 name="workflow_template_source",
-                create_type=False,
             ),
             nullable=False,
             server_default="code",
@@ -226,7 +210,6 @@ def upgrade() -> None:
                 "failed",
                 "cancelled",
                 name="workflow_run_status",
-                create_type=False,
             ),
             nullable=False,
             server_default="pending",
@@ -305,7 +288,6 @@ def upgrade() -> None:
                 "failed",
                 "skipped",
                 name="workflow_node_status",
-                create_type=False,
             ),
             nullable=False,
             server_default="pending",
