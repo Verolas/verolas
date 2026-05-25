@@ -39,7 +39,10 @@ export function IconRail({ sections, footer, activeKey }: IconRailProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="relative hidden w-12 shrink-0 md:block" aria-label="Primary navigation">
+    <div
+      className="sticky top-12 hidden h-[calc(100vh-3rem)] w-12 shrink-0 self-start md:block"
+      aria-label="Primary navigation"
+    >
       <div
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -49,7 +52,7 @@ export function IconRail({ sections, footer, activeKey }: IconRailProps) {
           setOpen(false);
         }}
         className={cn(
-          "absolute left-0 top-0 z-20 flex h-[calc(100vh-3rem)] flex-col border-r border-border bg-surface transition-[width] duration-150",
+          "absolute left-0 top-0 z-20 flex h-full flex-col border-r border-border bg-surface transition-[width] duration-150",
           open ? "w-48 shadow-md" : "w-12",
         )}
         data-state={open ? "expanded" : "collapsed"}

@@ -56,6 +56,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
