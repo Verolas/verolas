@@ -1,12 +1,10 @@
 """Tests for the Verolas Origin AI Design adapter.
 
 We do not call Anthropic in CI. Instead:
-- The stub-mode test verifies that an unconfigured settings produces a
-  three-option fallback payload so workflows still progress end-to-end.
-- The parse test exercises _parse_response against pretty-printed JSON
-  and against markdown-fenced JSON, since Claude occasionally wraps.
-- The template structure test verifies the ten-node Verolas Origin
-  workflow registers correctly with its `origin` group.
+- Engine-only path: with no API key the adapter emits the deterministic
+  grid-engine options for the reviewed geometry.
+- Parse path: _parse_response handles plain + markdown-fenced JSON.
+- Template structure: the ten-node Origin workflow still registers.
 """
 
 from __future__ import annotations
@@ -22,6 +20,13 @@ from verolas_api.workflow.adapters import (
     get_adapter,
 )
 from verolas_api.workflow.adapters.base import AdapterContext
+from verolas_api.workflow.origin.geometry import (
+    Extents,
+    Floor,
+    Geometry,
+    Point2D,
+    Wall,
+)
 from verolas_api.workflow.registry import (
     clear_registry_for_tests,
     registered_templates,
@@ -50,39 +55,72 @@ def _reload_origin_adapter() -> object:
     return adapter
 
 
+def _sample_reviewed_geometry() -> dict[str, object]:
+    geometry = Geometry(
+        source_format="dxf",
+        floors=[
+            Floor(
+                key="floor_1",
+                name="Floor 1",
+                extents=Extents(min_x=0.0, min_y=0.0, max_x=20.0, max_y=15.0),
+                walls=[
+                    Wall(
+                        id="w0",
+                        start=Point2D(x=0.0, y=0.0),
+                        end=Point2D(x=20.0, y=0.0),
+                    ),
+                ],
+            ),
+            Floor(
+                key="floor_2",
+                name="Roof",
+                elevation_m=3.0,
+                extents=Extents(min_x=0.0, min_y=0.0, max_x=20.0, max_y=15.0),
+                is_roof=True,
+            ),
+        ],
+    )
+    return geometry.model_dump(mode="json")
+
+
 @pytest.mark.asyncio
-async def test_origin_returns_stub_when_no_api_key() -> None:
-    """No anthropic_api_key configured -> deterministic three-option stub."""
+async def test_origin_engine_options_with_reviewed_geometry() -> None:
+    """With no API key, emit the deterministic engine shortlist."""
     adapter = _reload_origin_adapter()
 
     class _FakeSettings:
         anthropic_api_key = None
         anthropic_model = "claude-sonnet-4-6"
 
-    result = await adapter.run(_ctx(settings=_FakeSettings()), inputs={})  # type: ignore[attr-defined]
+    inputs = {
+        "architectural_review": {"reviewed_geometry": _sample_reviewed_geometry()},
+    }
+    result = await adapter.run(_ctx(settings=_FakeSettings()), inputs=inputs)  # type: ignore[attr-defined]
     assert result.succeeded
     options = result.outputs["options"]
     assert isinstance(options, list)
-    assert 3 <= len(options) <= 5
+    assert len(options) == 3
+    variants = {o["variant"] for o in options}
+    assert variants == {"optimized", "balanced", "conservative"}
     for option in options:
-        assert {"option_id", "summary", "bay_grid_m", "slab_type", "primary_structure"} <= set(
-            option.keys()
-        )
-    assert result.outputs["model"] == "stub"
-    assert "note" in result.outputs
+        assert "bay_grid_m" in option
+        assert "takeoff" in option
+        assert "dcr_distribution" in option
+        assert "constructibility" in option
+        # boq positive
+        assert option["boq_estimate_eur_m2"] > 0
+    assert result.outputs["model"] == "engine"
 
 
 @pytest.mark.asyncio
-async def test_origin_handles_missing_settings() -> None:
-    """settings=None is treated like no API key."""
+async def test_origin_errors_without_any_geometry() -> None:
     adapter = _reload_origin_adapter()
     result = await adapter.run(_ctx(settings=None), inputs={})  # type: ignore[attr-defined]
-    assert result.succeeded
-    assert result.outputs["model"] == "stub"
+    assert not result.succeeded
+    assert "reviewed_geometry" in (result.error or "")
 
 
 def test_origin_parse_plain_json() -> None:
-    """The adapter handles a Claude response that is already pure JSON."""
     adapter = _reload_origin_adapter()
     raw = '{"options": [{"option_id": "rc-flat-slab", "summary": "..."}]}'
     options = adapter._parse_response(raw)  # type: ignore[attr-defined]
@@ -91,7 +129,6 @@ def test_origin_parse_plain_json() -> None:
 
 
 def test_origin_parse_markdown_fenced_json() -> None:
-    """Claude sometimes wraps JSON in ```json fences; the adapter strips them."""
     adapter = _reload_origin_adapter()
     raw = '```json\n{"options": [{"option_id": "steel-mrf", "summary": "..."}]}\n```'
     options = adapter._parse_response(raw)  # type: ignore[attr-defined]
@@ -103,6 +140,12 @@ def test_origin_parse_rejects_non_list_options() -> None:
     adapter = _reload_origin_adapter()
     with pytest.raises(ValueError, match="'options' list"):
         adapter._parse_response('{"options": "not a list"}')  # type: ignore[attr-defined]
+
+
+def test_origin_parse_rejects_polished_entry_missing_option_id() -> None:
+    adapter = _reload_origin_adapter()
+    with pytest.raises(ValueError, match="option_id"):
+        adapter._parse_response('{"options": [{"summary": "no id"}]}')  # type: ignore[attr-defined]
 
 
 def test_verolas_origin_template_structure() -> None:
