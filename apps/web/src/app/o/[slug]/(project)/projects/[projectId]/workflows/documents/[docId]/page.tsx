@@ -56,8 +56,10 @@ import {
   workflowDocumentsApi,
   workflowsApi,
 } from "@/lib/api";
+import { DetailEditEditor } from "@/components/origin/DetailEditEditor";
 import { FloorReviewEditor } from "@/components/origin/FloorReviewEditor";
 import { RoofFramingEditor } from "@/components/origin/RoofFramingEditor";
+import type { DetailLayout } from "@/components/origin/detail";
 import type { Geometry } from "@/components/origin/geometry";
 import type { RoofFraming } from "@/components/origin/roof_framing";
 
@@ -317,9 +319,11 @@ function DocumentEditor({ params }: Props) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   // When set, the canvas pane is taken over by an Origin per-node
   // editor. "review" = architectural_review editor; "roof" = roof
-  // framing editor. Null means the React Flow graph is showing.
-  // Cleared on Save or Cancel.
-  const [reviewMode, setReviewMode] = useState<"review" | "roof" | null>(null);
+  // framing editor; "detail" = detail_edit editor. Null means the
+  // React Flow graph is showing. Cleared on Save or Cancel.
+  const [reviewMode, setReviewMode] = useState<"review" | "roof" | "detail" | null>(
+    null,
+  );
   const reactFlow = useReactFlow();
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -730,6 +734,37 @@ function DocumentEditor({ params }: Props) {
     [resolved, activeRun],
   );
 
+  const saveDetailLayout = useCallback(
+    async (layout: DetailLayout): Promise<void> => {
+      if (!resolved || !activeRun) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const updated = await workflowsApi.advanceManual(
+          resolved.slug,
+          resolved.projectId,
+          activeRun.id,
+          "detail_edit",
+          {
+            outputs: {
+              refined_option: layout,
+              refined_at: new Date().toISOString(),
+              refined_option_id: layout.option_id,
+            },
+          },
+        );
+        setActiveRun(updated);
+        setReviewMode(null);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.detail : String(err));
+        throw err;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [resolved, activeRun],
+  );
+
   const selectedFlowNode = useMemo(() => {
     if (!selectedNodeKey) return null;
     return flowNodes.find((n) => n.id === selectedNodeKey) ?? null;
@@ -961,6 +996,16 @@ function DocumentEditor({ params }: Props) {
               busy={busy}
               onCancel={() => setReviewMode(null)}
               onSave={saveRoofFraming}
+            />
+          ) : reviewMode === "detail" && resolved && activeRun ? (
+            <DetailEditEditor
+              activeRun={activeRun}
+              orgSlug={resolved.slug}
+              projectId={resolved.projectId}
+              runId={activeRun.id}
+              busy={busy}
+              onCancel={() => setReviewMode(null)}
+              onSave={saveDetailLayout}
             />
           ) : flowNodes.length === 0 ? (
             <div className="grid h-full place-items-center px-6 text-center">
@@ -1234,7 +1279,7 @@ function NodeDetailModal({
   onRename: (value: string) => void;
   onDelete: () => void;
   onManualDone: () => void;
-  onOpenReviewEditor?: ((mode: "review" | "roof") => void) | undefined;
+  onOpenReviewEditor?: ((mode: "review" | "roof" | "detail") => void) | undefined;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -1414,7 +1459,7 @@ function NodeWorkbench({
   activeRun: WorkflowRun | null;
   orgSlug: string | null;
   projectId: string | null;
-  onOpenReviewEditor?: ((mode: "review" | "roof") => void) | undefined;
+  onOpenReviewEditor?: ((mode: "review" | "roof" | "detail") => void) | undefined;
 }) {
   if (flowNode.id === "architectural_review") {
     return (
@@ -1441,6 +1486,16 @@ function NodeWorkbench({
   if (flowNode.id === "select_option") {
     return <OriginSelectOptionPanel activeRun={activeRun} />;
   }
+  if (flowNode.id === "detail_edit") {
+    return (
+      <OriginDetailEditPanel
+        activeRun={activeRun}
+        onOpenReviewEditor={
+          onOpenReviewEditor ? () => onOpenReviewEditor("detail") : undefined
+        }
+      />
+    );
+  }
   return (
     <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
       A node-specific workbench will live here. For Origin floor parse
@@ -1448,6 +1503,80 @@ function NodeWorkbench({
       floors.
     </div>
   );
+}
+
+function OriginDetailEditPanel({
+  activeRun,
+  onOpenReviewEditor,
+}: {
+  activeRun: WorkflowRun | null;
+  onOpenReviewEditor?: (() => void) | undefined;
+}) {
+  const aiNode = activeRun?.nodes.find((n) => n.node_key === "ai_options") ?? null;
+  const options =
+    (aiNode?.outputs?.options as OriginStructuralOption[] | undefined) ?? [];
+  const selectNode = activeRun?.nodes.find((n) => n.node_key === "select_option");
+  const note = selectNode?.outputs?.note as string | undefined;
+  const chosenId = pickOptionIdFromNoteText(note, options);
+  const chosen = options.find((o) => o.option_id === chosenId) ?? options[0] ?? null;
+
+  const detailNode = activeRun?.nodes.find((n) => n.node_key === "detail_edit");
+  const refined = detailNode?.outputs?.refined_option_id as string | undefined;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted-foreground">
+        Detail the chosen option member-by-member. Toggle layers, click any
+        column or beam to change its size, and watch the DCR colour update.
+        Save persists the refined layout for the export step.
+      </div>
+      {chosen ? (
+        <div className="rounded border border-border bg-background px-3 py-2 text-[11px]">
+          <span className="text-muted-foreground">Working on:</span>{" "}
+          <span className="font-medium">{chosen.primary_structure}</span>{" "}
+          <span className="text-muted-foreground">
+            ({chosen.option_id} · bay {chosen.bay_grid_m.x_m.toFixed(1)} x{" "}
+            {chosen.bay_grid_m.y_m.toFixed(1)} m)
+          </span>
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          ai_options has not produced a shortlist yet; finish that step first.
+        </p>
+      )}
+      {refined && (
+        <div className="rounded border border-emerald-300/50 bg-emerald-50/40 px-3 py-2 text-[11px] text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+          Refined detail saved for option <span className="font-mono">{refined}</span>.
+          Reopen the editor to make further edits.
+        </div>
+      )}
+      {onOpenReviewEditor && chosen && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onOpenReviewEditor}
+            className="inline-flex items-center gap-1 rounded border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:bg-accent dark:text-accent-foreground"
+          >
+            Open detail editor
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function pickOptionIdFromNoteText(
+  note: string | undefined,
+  options: OriginStructuralOption[],
+): string | null {
+  if (!note) return null;
+  for (const opt of options) {
+    if (note.includes(opt.option_id)) return opt.option_id;
+  }
+  for (const opt of options) {
+    if (note.toLowerCase().includes(opt.variant)) return opt.option_id;
+  }
+  return null;
 }
 
 function OriginRoofFramingPanel({
