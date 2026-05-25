@@ -23,14 +23,21 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from verolas_api.dependencies.org import DbOrgConn
 from verolas_api.middleware import sla_tier
+from verolas_api.workflow import documents as documents_service
 from verolas_api.workflow import runs as runs_service
+from verolas_api.workflow.documents import DocumentConflict, DocumentNotFound
 from verolas_api.workflow.executor import ExecutorError
 from verolas_api.workflow.runs import (
     RunNotFound,
     TemplateNotFound,
     WorkflowError,
 )
-from verolas_api.workflow.schema import RunView, TemplateView
+from verolas_api.workflow.schema import (
+    DocumentView,
+    RunView,
+    TemplateDefinition,
+    TemplateView,
+)
 
 org_workflow_router = APIRouter(
     prefix="/orgs/{org_slug}/workflows",
@@ -46,9 +53,34 @@ project_workflow_router = APIRouter(
 
 
 class WorkflowRunCreateBody(BaseModel):
+    """Create a run rooted in either a template (legacy) or a document."""
+
     model_config = ConfigDict(extra="forbid")
 
-    template_slug: str = Field(min_length=1, max_length=64)
+    template_slug: str | None = Field(default=None, min_length=1, max_length=64)
+    document_id: UUID | None = None
+
+
+class WorkflowDocumentCreateBody(BaseModel):
+    """Create a workflow document from a template or blank."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    folder: str = Field(default="/", max_length=400)
+    description: str | None = Field(default=None, max_length=2000)
+    template_slug: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class WorkflowDocumentUpdateBody(BaseModel):
+    """Partial update of a document."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    folder: str | None = Field(default=None, max_length=400)
+    description: str | None = Field(default=None, max_length=2000)
+    definition: TemplateDefinition | None = None
 
 
 class WorkflowGateDecisionBody(BaseModel):
@@ -118,22 +150,166 @@ async def create_workflow_run(
     body: WorkflowRunCreateBody,
     deps: DbOrgConn,
 ) -> RunView:
-    """Create a run for the project from a template slug.
+    """Create a run from either a template slug or a document id.
 
     Runs the executor inline so automated entry nodes complete before
-    the response. The returned RunView reflects post-inline state.
+    the response. Exactly one of template_slug or document_id must be set.
     """
     conn, ctx = deps
     pid = _project_id(project_id)
+
+    if (body.template_slug is None) == (body.document_id is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide exactly one of template_slug or document_id.",
+        )
+
     try:
-        return await runs_service.create_run(
+        if body.template_slug is not None:
+            return await runs_service.create_run(
+                conn,
+                org_id=ctx.organization_id,
+                project_id=pid,
+                template_slug=body.template_slug,
+                started_by_user_id=ctx.user_id,
+            )
+        assert body.document_id is not None
+        return await runs_service.create_run_from_document(
             conn,
             org_id=ctx.organization_id,
             project_id=pid,
-            template_slug=body.template_slug,
+            document_id=body.document_id,
             started_by_user_id=ctx.user_id,
         )
     except TemplateNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except WorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+# Document CRUD.
+
+
+@project_workflow_router.post(
+    "/documents",
+    response_model=DocumentView,
+    status_code=status.HTTP_201_CREATED,
+)
+@sla_tier(1)
+async def create_workflow_document(
+    project_id: Annotated[str, Path()],
+    body: WorkflowDocumentCreateBody,
+    deps: DbOrgConn,
+) -> DocumentView:
+    """Create a workflow document. Either blank or forked from a template."""
+    conn, ctx = deps
+    pid = _project_id(project_id)
+    try:
+        if body.template_slug:
+            return await documents_service.create_document_from_template(
+                conn,
+                org_id=ctx.organization_id,
+                project_id=pid,
+                folder=body.folder,
+                name=body.name,
+                description=body.description,
+                template_slug=body.template_slug,
+                created_by_user_id=ctx.user_id,
+            )
+        return await documents_service.create_blank_document(
+            conn,
+            org_id=ctx.organization_id,
+            project_id=pid,
+            folder=body.folder,
+            name=body.name,
+            description=body.description,
+            created_by_user_id=ctx.user_id,
+        )
+    except TemplateNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@project_workflow_router.get(
+    "/documents",
+    response_model=list[DocumentView],
+)
+@sla_tier(1)
+async def list_workflow_documents(
+    project_id: Annotated[str, Path()],
+    deps: DbOrgConn,
+) -> list[DocumentView]:
+    """List workflow documents for this project, grouped by folder client-side."""
+    conn, _ = deps
+    pid = _project_id(project_id)
+    return await documents_service.list_documents_for_project(conn, pid)
+
+
+@project_workflow_router.get(
+    "/documents/{document_id}",
+    response_model=DocumentView,
+)
+@sla_tier(1)
+async def get_workflow_document(
+    project_id: Annotated[str, Path()],
+    document_id: Annotated[UUID, Path()],
+    deps: DbOrgConn,
+) -> DocumentView:
+    """Fetch a single workflow document with its full definition."""
+    conn, _ = deps
+    _ = _project_id(project_id)
+    try:
+        return await documents_service.get_document(conn, document_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@project_workflow_router.patch(
+    "/documents/{document_id}",
+    response_model=DocumentView,
+)
+@sla_tier(1)
+async def update_workflow_document(
+    project_id: Annotated[str, Path()],
+    document_id: Annotated[UUID, Path()],
+    body: WorkflowDocumentUpdateBody,
+    deps: DbOrgConn,
+) -> DocumentView:
+    """Partial update of name, folder, description, or definition."""
+    conn, _ = deps
+    _ = _project_id(project_id)
+    try:
+        return await documents_service.update_document(
+            conn,
+            document_id,
+            name=body.name,
+            folder=body.folder,
+            description=body.description,
+            definition=body.definition,
+        )
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@project_workflow_router.delete(
+    "/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+@sla_tier(1)
+async def delete_workflow_document(
+    project_id: Annotated[str, Path()],
+    document_id: Annotated[UUID, Path()],
+    deps: DbOrgConn,
+) -> None:
+    """Hard-delete a workflow document. Runs already created from it remain (snapshotted)."""
+    conn, _ = deps
+    _ = _project_id(project_id)
+    try:
+        await documents_service.delete_document(conn, document_id)
+    except DocumentNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
