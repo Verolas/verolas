@@ -608,10 +608,13 @@ export interface WorkflowRunNode {
 export interface WorkflowRun {
   id: string;
   project_id: string;
-  template_id: string;
-  template_version_id: string;
-  template_slug: string;
-  template_name: string;
+  template_id: string | null;
+  template_version_id: string | null;
+  template_slug: string | null;
+  template_name: string | null;
+  document_id: string | null;
+  document_name: string | null;
+  display_name: string;
   status: WorkflowRunStatus;
   started_by_user_id: string | null;
   started_at: string | null;
@@ -687,5 +690,102 @@ export const workflowsApi = {
     request<WorkflowRun>(
       `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/cancel`,
       { method: "POST" },
+    ),
+};
+
+// Workflow documents (stage 4 backend). A document is a project-scoped
+// editable instance of a workflow graph. Runs can be created from a
+// document (snapshotted) or from a template (legacy direct).
+
+export interface WorkflowNode {
+  key: string;
+  kind: WorkflowNodeKind;
+  name: string;
+  description?: string | null;
+  params: Record<string, unknown>;
+}
+
+export interface WorkflowEdge {
+  from_key: string;
+  to_key: string;
+  condition?: string | null;
+}
+
+export interface WorkflowDefinition {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  entry_keys: string[];
+}
+
+export interface WorkflowDocument {
+  id: string;
+  org_id: string;
+  project_id: string;
+  folder: string;
+  name: string;
+  description: string | null;
+  source_template_id: string | null;
+  source_template_version_id: string | null;
+  definition: WorkflowDefinition;
+  node_count: number;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowDocumentCreate {
+  name: string;
+  folder?: string;
+  description?: string | null;
+  template_slug?: string | null;
+}
+
+export interface WorkflowDocumentUpdate {
+  name?: string;
+  folder?: string;
+  description?: string | null;
+  definition?: WorkflowDefinition;
+}
+
+export const workflowDocumentsApi = {
+  create: (slug: string, projectId: string, body: WorkflowDocumentCreate) =>
+    request<WorkflowDocument>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/documents`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  list: (slug: string, projectId: string) =>
+    request<WorkflowDocument[]>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/documents`,
+    ),
+  get: (slug: string, projectId: string, documentId: string) =>
+    request<WorkflowDocument>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/documents/${documentId}`,
+    ),
+  update: (
+    slug: string,
+    projectId: string,
+    documentId: string,
+    body: WorkflowDocumentUpdate,
+  ) =>
+    request<WorkflowDocument>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/documents/${documentId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+  delete: (slug: string, projectId: string, documentId: string) =>
+    request<void>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/documents/${documentId}`,
+      { method: "DELETE" },
+    ),
+  createRunFromDocument: (
+    slug: string,
+    projectId: string,
+    documentId: string,
+  ) =>
+    request<WorkflowRun>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs`,
+      {
+        method: "POST",
+        body: JSON.stringify({ document_id: documentId }),
+      },
     ),
 };
