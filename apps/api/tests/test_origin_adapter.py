@@ -5,8 +5,8 @@ We do not call Anthropic in CI. Instead:
   three-option fallback payload so workflows still progress end-to-end.
 - The parse test exercises _parse_response against pretty-printed JSON
   and against markdown-fenced JSON, since Claude occasionally wraps.
-- The template structure test verifies the four-node Verolas Origin
-  workflow registers correctly.
+- The template structure test verifies the ten-node Verolas Origin
+  workflow registers correctly with its `origin` group.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _ctx(settings: object | None = None) -> AdapterContext:
         project_id=uuid4(),
         run_id=uuid4(),
         node_id=uuid4(),
-        node_key="ai_design",
+        node_key="ai_options",
         params={"tool": "verolas.origin.generator"},
         storage=None,
         settings=settings,  # type: ignore[arg-type]
@@ -106,31 +106,52 @@ def test_origin_parse_rejects_non_list_options() -> None:
 
 
 def test_verolas_origin_template_structure() -> None:
-    """The Origin template should register with exactly 4 linear nodes."""
+    """The Origin template should register with 10 linear nodes in one group."""
     clear_registry_for_tests()
     sys.modules.pop("verolas_api.workflow.templates.verolas_origin", None)
     importlib.import_module("verolas_api.workflow.templates.verolas_origin")
 
     spec = next(t for t in registered_templates() if t.slug == "verolas-origin")
-    assert len(spec.definition.nodes) == 4
-    assert len(spec.definition.edges) == 3
-    assert spec.definition.entry_keys == ["submit_project"]
+    assert len(spec.definition.nodes) == 10
+    assert len(spec.definition.edges) == 9
+    assert spec.definition.entry_keys == ["submit_brief"]
 
     keys_in_order = [
-        "submit_project",
-        "ai_design",
+        "submit_brief",
+        "upload_cad",
+        "parameters",
+        "floor_parse",
+        "architectural_review",
+        "roof_framing",
+        "ai_options",
         "select_option",
-        "engineer_refine_seal",
+        "detail_edit",
+        "export_seal",
     ]
     for key in keys_in_order:
         assert any(n.key == key for n in spec.definition.nodes), f"missing node {key}"
 
-    # The ai_design node names the adapter tool the generator uses.
-    ai_node = next(n for n in spec.definition.nodes if n.key == "ai_design")
+    # The ai_options node names the adapter tool the generator uses.
+    ai_node = next(n for n in spec.definition.nodes if n.key == "ai_options")
     assert ai_node.params.get("tool") == "verolas.origin.generator"
 
+    # The floor_parse node names the parser adapter (built in 6c.3).
+    parser = next(n for n in spec.definition.nodes if n.key == "floor_parse")
+    assert parser.params.get("tool") == "verolas.origin.floor_parse"
+
+    # All nodes belong to the single `origin` group.
+    for node in spec.definition.nodes:
+        assert node.group_key == "origin", f"{node.key} missing group_key"
+
+    # The template declares the `origin` group with display metadata.
+    assert len(spec.definition.groups) == 1
+    origin_group = spec.definition.groups[0]
+    assert origin_group.key == "origin"
+    assert origin_group.name == "Verolas Origin"
+    assert origin_group.collapsed_by_default is True
+
     # SLAs are numeric params, not in node names.
-    submit = next(n for n in spec.definition.nodes if n.key == "submit_project")
-    assert submit.params.get("sla_minutes") == 30
-    seal = next(n for n in spec.definition.nodes if n.key == "engineer_refine_seal")
+    submit = next(n for n in spec.definition.nodes if n.key == "submit_brief")
+    assert submit.params.get("sla_minutes") == 15
+    seal = next(n for n in spec.definition.nodes if n.key == "export_seal")
     assert seal.params.get("sla_business_days") == 5

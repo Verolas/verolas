@@ -13,7 +13,14 @@ from __future__ import annotations
 
 from typing import Final
 
-from verolas_api.workflow.schema import EdgeDef, NodeDef, NodeKey, TemplateSpec
+from verolas_api.workflow.schema import (
+    EdgeDef,
+    GroupDef,
+    NodeDef,
+    NodeKey,
+    TemplateDefinition,
+    TemplateSpec,
+)
 
 _TEMPLATES: Final[dict[str, TemplateSpec]] = {}
 
@@ -41,41 +48,76 @@ def clear_registry_for_tests() -> None:
     _TEMPLATES.clear()
 
 
+def validate_definition(
+    definition: TemplateDefinition,
+    *,
+    context: str = "definition",
+) -> None:
+    """Run the same invariants as register_template on a bare TemplateDefinition.
+
+    Used by document-update paths so a project-scoped graph cannot drift
+    into a state that breaks the executor (duplicate keys, dangling
+    edges, mismatched entry_keys, cycles, dangling group_key). Pydantic
+    only enforces shape; this enforces semantics.
+    """
+    _validate_graph(context, definition)
+
+
 def _validate(spec: TemplateSpec) -> None:
     """Validate node keys, edge endpoints, entry keys, and acyclicity."""
-    keys = {node.key for node in spec.definition.nodes}
-    if len(keys) != len(spec.definition.nodes):
-        raise ValueError(f"Template '{spec.slug}' has duplicate node keys")
+    _validate_graph(f"Template '{spec.slug}'", spec.definition)
 
-    for edge in spec.definition.edges:
+
+def _validate_graph(context: str, definition: TemplateDefinition) -> None:
+    keys = {node.key for node in definition.nodes}
+    if len(keys) != len(definition.nodes):
+        raise ValueError(f"{context} has duplicate node keys")
+
+    for edge in definition.edges:
         if edge.from_key not in keys:
-            raise ValueError(
-                f"Template '{spec.slug}' edge from_key '{edge.from_key}' does not match any node"
-            )
+            raise ValueError(f"{context} edge from_key '{edge.from_key}' does not match any node")
         if edge.to_key not in keys:
-            raise ValueError(
-                f"Template '{spec.slug}' edge to_key '{edge.to_key}' does not match any node"
-            )
+            raise ValueError(f"{context} edge to_key '{edge.to_key}' does not match any node")
         if edge.from_key == edge.to_key:
-            raise ValueError(f"Template '{spec.slug}' has self-loop on '{edge.from_key}'")
+            raise ValueError(f"{context} has self-loop on '{edge.from_key}'")
 
     inbound: dict[NodeKey, int] = {key: 0 for key in keys}
-    for edge in spec.definition.edges:
+    for edge in definition.edges:
         inbound[edge.to_key] += 1
 
     computed_entries = {key for key, count in inbound.items() if count == 0}
-    declared_entries = set(spec.definition.entry_keys)
+    declared_entries = set(definition.entry_keys)
     if computed_entries != declared_entries:
         raise ValueError(
-            f"Template '{spec.slug}' declared entry_keys "
+            f"{context} declared entry_keys "
             f"{sorted(declared_entries)} but graph entries are "
             f"{sorted(computed_entries)}"
         )
 
-    _ensure_acyclic(spec.slug, spec.definition.nodes, spec.definition.edges)
+    _ensure_acyclic(context, definition.nodes, definition.edges)
+    _validate_groups(context, definition.nodes, definition.groups)
 
 
-def _ensure_acyclic(slug: str, nodes: list[NodeDef], edges: list[EdgeDef]) -> None:
+def _validate_groups(context: str, nodes: list[NodeDef], groups: list[GroupDef]) -> None:
+    """Group keys must be unique, and every node group_key must resolve.
+
+    Groups are pure UI structure (the executor never reads them), so we
+    do not constrain how nodes connect across groups. We only enforce
+    referential integrity so the canvas does not get a dangling
+    group_key it cannot render.
+    """
+    group_keys = [g.key for g in groups]
+    if len(set(group_keys)) != len(group_keys):
+        raise ValueError(f"{context} has duplicate group keys")
+    known = set(group_keys)
+    for node in nodes:
+        if node.group_key is not None and node.group_key not in known:
+            raise ValueError(
+                f"{context} node '{node.key}' references unknown group_key '{node.group_key}'"
+            )
+
+
+def _ensure_acyclic(context: str, nodes: list[NodeDef], edges: list[EdgeDef]) -> None:
     """Kahn's algorithm. We forbid cycles in v1 templates; loops come later."""
     adj: dict[NodeKey, list[NodeKey]] = {n.key: [] for n in nodes}
     indeg: dict[NodeKey, int] = {n.key: 0 for n in nodes}
@@ -93,6 +135,6 @@ def _ensure_acyclic(slug: str, nodes: list[NodeDef], edges: list[EdgeDef]) -> No
                 queue.append(target)
     if visited != len(nodes):
         raise ValueError(
-            f"Template '{slug}' contains a cycle. Cycles are not supported "
+            f"{context} contains a cycle. Cycles are not supported "
             f"in v1; use a branch.iterate node once that kind is wired."
         )
