@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowLeft, Check, Loader2, Square, Trash2, X } from "lucide-react";
+import { Anchor, ArrowLeft, Check, Loader2, Square, Trash2, Undo2, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -90,6 +90,29 @@ export function FloorReviewEditor({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Undo history. We push the previous Geometry snapshot onto the stack
+  // before each edit so Ctrl+Z (Cmd+Z) restores it. Capped at 50 to
+  // bound memory. Endpoint drags would otherwise spam the stack with
+  // every mouse-move frame, so the move-endpoint path uses a single
+  // commit on drag start instead of every frame.
+  const historyRef = useRef<Geometry[]>([]);
+  const HISTORY_CAP = 50;
+  const pushHistory = useCallback((snapshot: Geometry): void => {
+    historyRef.current.push(snapshot);
+    if (historyRef.current.length > HISTORY_CAP) {
+      historyRef.current.shift();
+    }
+  }, []);
+  const undo = useCallback((): void => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    setGeometry(prev);
+    setSelection(null);
+    setPendingWallStart(null);
+    setPendingWallEnd(null);
+    setDraggingEndpoint(null);
+  }, []);
 
   // Resize observer keeps the canvas in lockstep with its container.
   useEffect(() => {
@@ -201,9 +224,12 @@ export function FloorReviewEditor({
   );
 
   const updateCurrentFloor = useCallback(
-    (mutate: (floor: Floor) => Floor): void => {
+    (mutate: (floor: Floor) => Floor, options?: { skipHistory?: boolean }): void => {
       setGeometry((prev) => {
         if (!prev || !floorKey) return prev;
+        if (!options?.skipHistory) {
+          pushHistory(prev);
+        }
         const next: Geometry = {
           ...prev,
           floors: prev.floors.map((f) => (f.key === floorKey ? mutate(f) : f)),
@@ -212,7 +238,7 @@ export function FloorReviewEditor({
       });
       setDirty(true);
     },
-    [floorKey],
+    [floorKey, pushHistory],
   );
 
   // Stage click dispatches by current tool.
@@ -285,16 +311,23 @@ export function FloorReviewEditor({
       const model = toModel(ptr.x, ptr.y);
       if (pendingWallStart) setPendingWallEnd(model);
       if (draggingEndpoint && currentFloor) {
-        updateCurrentFloor((floor) => ({
-          ...floor,
-          walls: floor.walls.map((w) =>
-            w.id === draggingEndpoint.wallId
-              ? draggingEndpoint.which === "start"
-                ? { ...w, start: model }
-                : { ...w, end: model }
-              : w,
-          ),
-        }));
+        // Each mouse-move during a drag is a separate edit by the
+        // updater's eyes, but we only want one history entry per drag.
+        // The drag-start handler captured a snapshot already; per-
+        // frame updates here skip the stack.
+        updateCurrentFloor(
+          (floor) => ({
+            ...floor,
+            walls: floor.walls.map((w) =>
+              w.id === draggingEndpoint.wallId
+                ? draggingEndpoint.which === "start"
+                  ? { ...w, start: model }
+                  : { ...w, end: model }
+                : w,
+            ),
+          }),
+          { skipHistory: true },
+        );
       }
     },
     [pendingWallStart, draggingEndpoint, currentFloor, toModel, updateCurrentFloor],
@@ -367,6 +400,12 @@ export function FloorReviewEditor({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        undo();
+        return;
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
         deleteSelection();
       } else if (e.key === "Escape") {
@@ -378,7 +417,44 @@ export function FloorReviewEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteSelection]);
+  }, [deleteSelection, undo]);
+
+  // Snap a selected orphaned opening to whatever wall is closest, no
+  // distance limit. Used when the engineer deletes a wall and wants to
+  // rebind the affected door/window to a new wall without re-drawing.
+  const reanchorSelectedOpening = useCallback((): void => {
+    if (!selection || selection.kind !== "opening" || !currentFloor) return;
+    const opening = currentFloor.openings.find((o) => o.id === selection.id);
+    if (!opening) return;
+    let bestId = "";
+    let bestProj = opening.center;
+    let bestDistance = Infinity;
+    for (const wall of currentFloor.walls) {
+      const proj = projectOnto(opening.center, wall.start, wall.end);
+      const dx = proj.x - opening.center.x;
+      const dy = proj.y - opening.center.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestId = wall.id;
+        bestProj = proj;
+      }
+    }
+    if (!bestId) return;
+    updateCurrentFloor((floor) => ({
+      ...floor,
+      openings: floor.openings.map((o) =>
+        o.id === opening.id ? { ...o, wall_id: bestId, center: bestProj } : o,
+      ),
+    }));
+  }, [selection, currentFloor, updateCurrentFloor]);
+
+  // True only when an orphaned opening (wall_id="") is selected.
+  const orphanedOpeningSelected = useMemo(() => {
+    if (!selection || selection.kind !== "opening" || !currentFloor) return false;
+    const opening = currentFloor.openings.find((o) => o.id === selection.id);
+    return opening !== undefined && opening.wall_id === "";
+  }, [selection, currentFloor]);
 
   const handleSave = useCallback(async () => {
     if (!geometry) return;
@@ -457,11 +533,32 @@ export function FloorReviewEditor({
               {p.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={undo}
+            disabled={historyRef.current.length === 0}
+            title="Undo last edit (Ctrl/Cmd+Z)"
+            className="ml-2 inline-flex items-center gap-1 rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-surface-hover disabled:opacity-40"
+          >
+            <Undo2 className="size-3" aria-hidden="true" />
+            Undo
+          </button>
+          {orphanedOpeningSelected && (
+            <button
+              type="button"
+              onClick={reanchorSelectedOpening}
+              title="Re-anchor this opening to the nearest wall"
+              className="inline-flex items-center gap-1 rounded border border-brand-300 bg-brand-50 px-2.5 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-100 dark:bg-accent dark:text-accent-foreground"
+            >
+              <Anchor className="size-3" aria-hidden="true" />
+              Re-anchor
+            </button>
+          )}
           {selection && (
             <button
               type="button"
               onClick={deleteSelection}
-              className="ml-2 inline-flex items-center gap-1 rounded border border-destructive/30 bg-destructive/5 px-2.5 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
+              className="inline-flex items-center gap-1 rounded border border-destructive/30 bg-destructive/5 px-2.5 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="size-3" aria-hidden="true" />
               Delete
@@ -540,9 +637,12 @@ export function FloorReviewEditor({
             onSelectWall={(id) => setSelection({ kind: "wall", id })}
             onSelectColumn={(id) => setSelection({ kind: "column", id })}
             onSelectOpening={(id) => setSelection({ kind: "opening", id })}
-            onBeginDragEndpoint={(wallId, which) =>
-              setDraggingEndpoint({ wallId, which })
-            }
+            onBeginDragEndpoint={(wallId, which) => {
+              // Snapshot once at drag start so Ctrl+Z restores the
+              // wall's pre-drag position, not the previous frame.
+              if (geometry) pushHistory(geometry);
+              setDraggingEndpoint({ wallId, which });
+            }}
           />
         ) : (
           <div className="grid h-full place-items-center text-xs text-muted-foreground">
@@ -680,12 +780,16 @@ function CanvasStage({
           {floor.openings.map((o) => {
             const isSelected =
               selection?.kind === "opening" && selection.id === o.id;
+            const isOrphan = o.wall_id === "";
             const r = Math.max(4, (o.width_m / 2) * scale);
             const fill = isSelected
               ? "#3A6BBF"
               : o.kind === "door"
                 ? "#C0463E"
                 : "#3A6BBF";
+            const orphanProps = isOrphan
+              ? { stroke: "#C0463E", strokeWidth: 2, dash: [3, 2] }
+              : {};
             return (
               <KonvaCircle
                 key={o.id}
@@ -693,7 +797,8 @@ function CanvasStage({
                 y={toPxY(o.center.y)}
                 radius={r}
                 fill={fill}
-                opacity={0.75}
+                opacity={isOrphan ? 0.35 : 0.75}
+                {...orphanProps}
                 onClick={(e) => {
                   e.cancelBubble = true;
                   if (tool === "select") onSelectOpening(o.id);
@@ -782,3 +887,17 @@ function EndpointHandle({
 // the column-tool glyph in callers when we wire icons in the future;
 // kept exported so the symbol is referenced.
 export const ColumnGlyph = Square;
+
+// Project a point onto the infinite line segment between a and b,
+// clamped to the segment. Used by the re-anchor action so the opening
+// snaps onto the closest wall instead of floating at its old centre.
+function projectOnto(p: Point2D, a: Point2D, b: Point2D): Point2D {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return { x: a.x, y: a.y };
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
