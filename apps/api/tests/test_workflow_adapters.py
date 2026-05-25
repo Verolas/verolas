@@ -34,9 +34,7 @@ def _ctx() -> AdapterContext:
 class _DummyAdapter(NodeAdapter):
     tool = "test.dummy"
 
-    async def run(
-        self, ctx: AdapterContext, inputs: dict[str, object]
-    ) -> AdapterResult:
+    async def run(self, ctx: AdapterContext, inputs: dict[str, object]) -> AdapterResult:
         return AdapterResult(outputs={"ok": True, "input_count": len(inputs)})
 
 

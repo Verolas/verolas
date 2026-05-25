@@ -703,6 +703,10 @@ export interface WorkflowNode {
   name: string;
   description?: string | null;
   params: Record<string, unknown>;
+  // Optional supernode membership. Nodes with the same group_key
+  // render as one collapsible group card on the canvas. Missing on
+  // older documents created before the group model landed.
+  group_key?: string | null;
 }
 
 export interface WorkflowEdge {
@@ -711,10 +715,21 @@ export interface WorkflowEdge {
   condition?: string | null;
 }
 
+export interface WorkflowGroup {
+  key: string;
+  name: string;
+  description?: string | null;
+  collapsed_by_default?: boolean;
+  params?: Record<string, unknown>;
+}
+
 export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   entry_keys: string[];
+  // Optional groups that bundle nodes into collapsible supernodes on
+  // the canvas. Empty / missing means a flat graph.
+  groups?: WorkflowGroup[];
 }
 
 export interface WorkflowDocument {

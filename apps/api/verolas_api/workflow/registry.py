@@ -13,7 +13,13 @@ from __future__ import annotations
 
 from typing import Final
 
-from verolas_api.workflow.schema import EdgeDef, NodeDef, NodeKey, TemplateSpec
+from verolas_api.workflow.schema import (
+    EdgeDef,
+    GroupDef,
+    NodeDef,
+    NodeKey,
+    TemplateSpec,
+)
 
 _TEMPLATES: Final[dict[str, TemplateSpec]] = {}
 
@@ -73,6 +79,27 @@ def _validate(spec: TemplateSpec) -> None:
         )
 
     _ensure_acyclic(spec.slug, spec.definition.nodes, spec.definition.edges)
+    _validate_groups(spec.slug, spec.definition.nodes, spec.definition.groups)
+
+
+def _validate_groups(slug: str, nodes: list[NodeDef], groups: list[GroupDef]) -> None:
+    """Group keys must be unique, and every node group_key must resolve.
+
+    Groups are pure UI structure (the executor never reads them), so we
+    do not constrain how nodes connect across groups. We only enforce
+    referential integrity so the canvas does not get a dangling
+    group_key it cannot render.
+    """
+    group_keys = [g.key for g in groups]
+    if len(set(group_keys)) != len(group_keys):
+        raise ValueError(f"Template '{slug}' has duplicate group keys")
+    known = set(group_keys)
+    for node in nodes:
+        if node.group_key is not None and node.group_key not in known:
+            raise ValueError(
+                f"Template '{slug}' node '{node.key}' references unknown "
+                f"group_key '{node.group_key}'"
+            )
 
 
 def _ensure_acyclic(slug: str, nodes: list[NodeDef], edges: list[EdgeDef]) -> None:

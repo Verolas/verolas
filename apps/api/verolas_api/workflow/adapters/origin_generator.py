@@ -1,13 +1,15 @@
 """Verolas Origin AI Design adapter.
 
 Tool key: `verolas.origin.generator`. Used by the Verolas Origin
-template's `ai_design` node. Reads the project brief from the upstream
-`submit_project` node's outputs and asks Anthropic Claude to propose
-3 to 5 structural concept options.
+template's `ai_options` node. Reads the brief and parameters from the
+upstream `submit_brief`, `parameters`, and (when present) `roof_framing`
+outputs and asks Anthropic Claude to propose 3 to 5 structural concept
+options.
 
 The model is a design assistant. The engineer (the next `select_option`
-gate and the `engineer_refine_seal` manual node) remains the
-responsible designer. Copy and prompts reinforce that framing.
+gate, the `detail_edit` editor, and the `export_seal` manual node)
+remains the responsible designer. Copy and prompts reinforce that
+framing.
 
 When `settings.anthropic_api_key` is unset (tests, or dev deployments
 without the secret), the adapter returns a stubbed payload with three
@@ -131,10 +133,20 @@ class OriginGeneratorAdapter(NodeAdapter):
         ctx: AdapterContext,
         inputs: dict[str, Any],
     ) -> AdapterResult:
-        brief = inputs.get("submit_project", {}) or {}
+        # The Origin template runs the AI options node after submit_brief,
+        # upload_cad, parameters, floor_parse, architectural_review, and
+        # roof_framing. Pull what we can from each; fall back gracefully
+        # when an upstream node did not emit the expected field.
+        brief = inputs.get("submit_brief") or inputs.get("submit_project") or {}
+        params_step = inputs.get("parameters") or {}
         brief_text = str(brief.get("brief_text") or brief.get("brief") or "").strip()
-        building_type = str(brief.get("building_type") or "residential")
-        jurisdiction = str(brief.get("jurisdiction") or "DE")
+        building_type = str(
+            brief.get("asset_type")
+            or brief.get("building_type")
+            or params_step.get("asset_type")
+            or "residential"
+        )
+        jurisdiction = str(brief.get("jurisdiction") or params_step.get("jurisdiction") or "DE")
 
         api_key = ctx.settings.anthropic_api_key if ctx.settings else None
         model = ctx.settings.anthropic_model if ctx.settings else "claude-sonnet-4-6"

@@ -78,6 +78,21 @@ NodeKey = Annotated[
 ]
 
 
+GroupKey = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z][a-z0-9_]*$",
+        min_length=1,
+        max_length=64,
+        description=(
+            "Stable identifier of a node group inside a template. Groups "
+            "render as a single collapsible supernode on the canvas and "
+            "expand inline to show their member nodes. Snake case."
+        ),
+    ),
+]
+
+
 class NodeDef(BaseModel):
     """One node in a template definition."""
 
@@ -90,6 +105,26 @@ class NodeDef(BaseModel):
     # Free-form parameters consumed by the executor for this node kind.
     # For gate.* nodes, this typically holds {"assignee_role": "..."}.
     # For automated nodes, it holds the tool reference and arguments.
+    params: dict[str, Any] = Field(default_factory=dict)
+    # Optional supernode membership. Nodes with the same group_key collapse
+    # together on the canvas as a single group card. Cross-group edges are
+    # allowed; the parent workflow only sees aggregate group status. Groups
+    # are pure UI structure, the executor still walks the flat node graph.
+    group_key: GroupKey | None = None
+
+
+class GroupDef(BaseModel):
+    """A named cluster of nodes that renders as one collapsible supernode."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    key: GroupKey
+    name: str
+    description: str | None = None
+    # Whether the group renders collapsed by default. Users can always
+    # expand at runtime; this only seeds the initial layout state.
+    collapsed_by_default: bool = True
+    # Free-form UI metadata, e.g. an accent colour or icon hint.
     params: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -118,6 +153,10 @@ class TemplateDefinition(BaseModel):
     # at registration time; persisted so the executor does not need to
     # recompute on every start.
     entry_keys: list[NodeKey]
+    # Optional groups that bundle nodes into collapsible supernodes on
+    # the canvas. A node references its group via NodeDef.group_key.
+    # Empty list means a flat graph with no groups (back-compat).
+    groups: list[GroupDef] = Field(default_factory=list)
 
     def hash(self) -> str:
         """Stable hash of the serialized definition.

@@ -46,6 +46,7 @@ import {
   ApiError,
   type WorkflowDocument,
   type WorkflowEdge,
+  type WorkflowGroup,
   type WorkflowNode,
   type WorkflowNodeKind,
   type WorkflowNodeStatus,
@@ -66,10 +67,33 @@ interface WorkflowNodeData {
   description: string | null;
   params: Record<string, unknown>;
   status: WorkflowNodeStatus | null;
+  groupKey: string | null;
+  [key: string]: unknown;
+}
+
+// Synthetic "group supernode" cards drawn on the canvas when a group is
+// collapsed. They live only in the rendered view; the source-of-truth
+// flowNodes list always stays flat and contains the real members.
+interface GroupCardData {
+  groupKey: string;
+  name: string;
+  description: string | null;
+  memberCount: number;
+  aggregateStatus: WorkflowNodeStatus | null;
+  onToggle: () => void;
   [key: string]: unknown;
 }
 
 type FlowNode = Node<WorkflowNodeData>;
+type GroupFlowNode = Node<GroupCardData>;
+
+const GROUP_NODE_PREFIX = "group:";
+function groupCardId(groupKey: string): string {
+  return `${GROUP_NODE_PREFIX}${groupKey}`;
+}
+function isGroupCardId(id: string): boolean {
+  return id.startsWith(GROUP_NODE_PREFIX);
+}
 
 const STATUS_TONE: Record<WorkflowNodeStatus, string> = {
   pending: "border-border bg-surface text-muted-foreground",
@@ -124,7 +148,56 @@ function WorkflowNodeCard({ data }: { data: WorkflowNodeData }) {
   );
 }
 
-const NODE_TYPES: NodeTypes = { workflowNode: WorkflowNodeCard as unknown as NodeTypes[string] };
+function GroupSupernodeCard({ data }: { data: GroupCardData }) {
+  const status = data.aggregateStatus ?? "pending";
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        // Prevent ReactFlow node selection from swallowing the toggle.
+        e.stopPropagation();
+        data.onToggle();
+      }}
+      className={`group min-w-[240px] cursor-pointer rounded-lg border-2 border-dashed px-4 py-3 text-left text-xs shadow-md transition-colors ${STATUS_TONE[status]}`}
+    >
+      <Handle type="target" position={Position.Left} className="!size-1.5 !bg-current" />
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
+          Group · click to expand
+        </span>
+        <span className="text-[10px] opacity-70">{data.memberCount} steps</span>
+      </div>
+      <div className="mt-1 text-sm font-semibold">{data.name}</div>
+      {data.description && (
+        <div className="mt-1 line-clamp-2 text-[10px] opacity-80">{data.description}</div>
+      )}
+      <Handle type="source" position={Position.Right} className="!size-1.5 !bg-current" />
+    </button>
+  );
+}
+
+const NODE_TYPES: NodeTypes = {
+  workflowNode: WorkflowNodeCard as unknown as NodeTypes[string],
+  groupCard: GroupSupernodeCard as unknown as NodeTypes[string],
+};
+
+// Aggregate child statuses into one group status. Order of precedence
+// reflects what the user most needs to know first.
+function aggregateGroupStatus(
+  childStatuses: (WorkflowNodeStatus | null)[],
+): WorkflowNodeStatus | null {
+  const set = new Set(childStatuses.filter((s): s is WorkflowNodeStatus => s !== null));
+  if (set.size === 0) return null;
+  if (set.has("failed")) return "failed";
+  if (set.has("running")) return "running";
+  if (set.has("ready")) return "ready";
+  if (set.has("paused")) return "paused";
+  if (set.has("pending")) return "pending";
+  // Only completed or skipped remain.
+  if (set.has("completed") && !set.has("skipped")) return "completed";
+  if (set.has("skipped") && !set.has("completed")) return "skipped";
+  return "completed";
+}
 
 // Build initial React Flow nodes from a server document. Honors a
 // previously-saved `_position` in node params; falls back to a BFS layout.
@@ -184,6 +257,7 @@ function buildInitialFlow(doc: WorkflowDocument): {
       description: n.description ?? null,
       params: n.params ?? {},
       status: null,
+      groupKey: n.group_key ?? null,
     },
   }));
   const edges: Edge[] = doc.definition.edges.map((e, i) => ({
@@ -235,8 +309,18 @@ function DocumentEditor({ params }: Props) {
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const reactFlow = useReactFlow();
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
+
+  const toggleGroup = useCallback((groupKey: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     void params.then(setResolved);
@@ -255,6 +339,17 @@ function DocumentEditor({ params }: Props) {
       const { nodes, edges } = buildInitialFlow(d);
       setFlowNodes(nodes);
       setFlowEdges(edges);
+      // Seed collapsed state from each group's collapsed_by_default
+      // flag the first time we see the document. Subsequent reloads
+      // preserve the user's expand/collapse choices.
+      setCollapsedGroups((prev) => {
+        if (prev.size > 0) return prev;
+        const seeded = new Set<string>();
+        (d.definition.groups ?? []).forEach((g) => {
+          if (g.collapsed_by_default !== false) seeded.add(g.key);
+        });
+        return seeded;
+      });
       setDirty(false);
       const runs = await workflowsApi.listRuns(resolved.slug, resolved.projectId);
       const docRuns = runs.filter((r) => r.document_id === d.id);
@@ -364,6 +459,7 @@ function DocumentEditor({ params }: Props) {
           description: null,
           params: {},
           status: null,
+          groupKey: null,
         },
       };
       setFlowNodes((prev) => [...prev, newNode]);
@@ -400,6 +496,7 @@ function DocumentEditor({ params }: Props) {
           ...(n.data.params ?? {}),
           _position: { x: n.position.x, y: n.position.y },
         },
+        group_key: n.data.groupKey,
       }));
       const definitionEdges: WorkflowEdge[] = validEdges.map((e) => ({
         from_key: e.source,
@@ -416,6 +513,7 @@ function DocumentEditor({ params }: Props) {
             nodes: definitionNodes,
             edges: definitionEdges,
             entry_keys: entryKeys,
+            groups: doc.definition.groups ?? [],
           },
         },
       );
@@ -566,6 +664,103 @@ function DocumentEditor({ params }: Props) {
     return flowNodes.find((n) => n.id === selectedNodeKey) ?? null;
   }, [selectedNodeKey, flowNodes]);
 
+  // Group-aware view layer. The source-of-truth `flowNodes` is always a
+  // flat list of real nodes; the view layer collapses groups into
+  // synthetic supernode cards. Edges crossing a collapsed group get
+  // their endpoint rewritten to the group card; edges internal to a
+  // collapsed group are hidden. Open/expanded groups render their
+  // members normally.
+  const { viewNodes, viewEdges } = useMemo(() => {
+    const groupsByKey = new Map<string, WorkflowGroup>();
+    (doc?.definition.groups ?? []).forEach((g) => groupsByKey.set(g.key, g));
+
+    const membersByGroup = new Map<string, FlowNode[]>();
+    flowNodes.forEach((n) => {
+      const gk = n.data.groupKey;
+      if (gk) {
+        if (!membersByGroup.has(gk)) membersByGroup.set(gk, []);
+        membersByGroup.get(gk)!.push(n);
+      }
+    });
+
+    // We render real workflow nodes and synthetic group cards as one
+    // mixed array; ReactFlow only cares about the `type` discriminator
+    // to pick the renderer. We widen to Node so the union is accepted.
+    const visibleNodes: Node[] = [];
+    const nodeIdToGroupCard = new Map<string, string>();
+
+    // Pass 1: emit one supernode per collapsed group.
+    membersByGroup.forEach((members, groupKey) => {
+      const def = groupsByKey.get(groupKey);
+      const isCollapsed = collapsedGroups.has(groupKey) && def !== undefined;
+      if (!isCollapsed) return;
+      const avgX = members.reduce((acc, m) => acc + m.position.x, 0) / members.length;
+      const avgY = members.reduce((acc, m) => acc + m.position.y, 0) / members.length;
+      const groupId = groupCardId(groupKey);
+      members.forEach((m) => nodeIdToGroupCard.set(m.id, groupId));
+      const card: GroupFlowNode = {
+        id: groupId,
+        type: "groupCard",
+        position: { x: avgX, y: avgY },
+        draggable: false,
+        deletable: false,
+        data: {
+          groupKey,
+          name: def.name,
+          description: def.description ?? null,
+          memberCount: members.length,
+          aggregateStatus: aggregateGroupStatus(members.map((m) => m.data.status)),
+          onToggle: () => toggleGroup(groupKey),
+        },
+      };
+      visibleNodes.push(card as unknown as Node);
+    });
+
+    // Pass 2: emit ungrouped nodes + members of expanded groups as-is.
+    flowNodes.forEach((n) => {
+      if (n.data.groupKey && collapsedGroups.has(n.data.groupKey)) return;
+      visibleNodes.push(n as unknown as Node);
+    });
+
+    // Edges: rewrite endpoints that live inside a collapsed group to
+    // point at the group card; drop edges fully internal to a single
+    // collapsed group.
+    const visibleEdges: Edge[] = [];
+    flowEdges.forEach((e) => {
+      const sourceGroup = nodeIdToGroupCard.get(e.source);
+      const targetGroup = nodeIdToGroupCard.get(e.target);
+      if (sourceGroup && targetGroup && sourceGroup === targetGroup) return;
+      const next: Edge = { ...e };
+      if (sourceGroup) next.source = sourceGroup;
+      if (targetGroup) next.target = targetGroup;
+      next.id = `${e.id}::${next.source}->${next.target}`;
+      visibleEdges.push(next);
+    });
+
+    return { viewNodes: visibleNodes, viewEdges: visibleEdges };
+  }, [flowNodes, flowEdges, doc, collapsedGroups, toggleGroup]);
+
+  // Wrap onNodesChange to ignore changes targeting group cards (they
+  // are read-only proxies; the source-of-truth nodes do not move when
+  // the user drags a card). Member dragging happens when the group is
+  // expanded, which goes through the normal pathway.
+  const handleViewNodesChange = useCallback<typeof onNodesChange>(
+    (changes) => {
+      const realChanges = changes.filter((c) => {
+        const targetId =
+          "id" in c
+            ? c.id
+            : "item" in c && c.item && typeof c.item === "object"
+              ? (c.item as { id?: string }).id
+              : undefined;
+        if (typeof targetId === "string" && isGroupCardId(targetId)) return false;
+        return true;
+      });
+      handleNodesChange(realChanges);
+    },
+    [handleNodesChange],
+  );
+
   const selectedRunNode = useMemo<WorkflowRunNode | null>(() => {
     if (!selectedNodeKey || !activeRun) return null;
     return activeRun.nodes.find((n) => n.node_key === selectedNodeKey) ?? null;
@@ -697,10 +892,10 @@ function DocumentEditor({ params }: Props) {
             </div>
           ) : (
             <ReactFlow
-              nodes={flowNodes}
-              edges={flowEdges}
+              nodes={viewNodes as unknown as FlowNode[]}
+              edges={viewEdges}
               nodeTypes={NODE_TYPES}
-              onNodesChange={handleNodesChange}
+              onNodesChange={handleViewNodesChange}
               onEdgesChange={handleEdgesChange}
               onConnect={onConnect}
               onDrop={onDrop}
@@ -711,7 +906,14 @@ function DocumentEditor({ params }: Props) {
               nodesDraggable
               nodesConnectable
               elementsSelectable
-              onNodeClick={(_, node) => setSelectedNodeKey(node.id)}
+              onNodeClick={(_, node) => {
+                // Clicking a group card is a no-op here; the card's
+                // own click handler toggles collapse. Selecting it for
+                // the side modal would be misleading because the card
+                // is synthetic and not editable.
+                if (isGroupCardId(node.id)) return;
+                setSelectedNodeKey(node.id);
+              }}
               deleteKeyCode={["Backspace", "Delete"]}
             >
               <Background variant={BackgroundVariant.Dots} gap={20} size={1} />

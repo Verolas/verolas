@@ -14,6 +14,7 @@ from verolas_api.workflow.registry import (
 )
 from verolas_api.workflow.schema import (
     EdgeDef,
+    GroupDef,
     NodeDef,
     NodeKind,
     TemplateDefinition,
@@ -209,6 +210,94 @@ def test_self_loop_rejected() -> None:
         definition=definition,
     )
     with pytest.raises(ValueError, match="self-loop"):
+        register_template(spec)
+
+
+def test_groups_default_to_empty_for_back_compat() -> None:
+    """Templates without groups still validate (flat-graph back-compat)."""
+    spec = _spec()
+    assert spec.definition.groups == []
+    register_template(spec)
+
+
+def test_group_membership_validates_and_round_trips() -> None:
+    """A template can declare groups and reference them via node.group_key."""
+    definition = TemplateDefinition(
+        nodes=[
+            NodeDef(key="start", kind=NodeKind.MANUAL, name="Start", group_key="g1"),
+            NodeDef(key="middle", kind=NodeKind.AUTOMATED, name="Mid", group_key="g1"),
+            NodeDef(key="end", kind=NodeKind.MANUAL, name="End"),
+        ],
+        edges=[
+            EdgeDef(from_key="start", to_key="middle"),
+            EdgeDef(from_key="middle", to_key="end"),
+        ],
+        entry_keys=["start"],
+        groups=[
+            GroupDef(key="g1", name="Pair", description="Two nodes grouped."),
+        ],
+    )
+    spec = TemplateSpec(
+        slug="grouped",
+        name="Grouped",
+        description=None,
+        jurisdiction=None,
+        project_type=None,
+        definition=definition,
+    )
+    register_template(spec)
+
+    # Round-trip through JSON should preserve group_key + groups.
+    payload = spec.model_dump(mode="json")
+    spec_again = TemplateSpec.model_validate(payload)
+    assert spec == spec_again
+    node = next(n for n in spec_again.definition.nodes if n.key == "start")
+    assert node.group_key == "g1"
+    assert spec_again.definition.groups[0].collapsed_by_default is True
+
+
+def test_unknown_group_key_on_node_rejected() -> None:
+    """A node referencing an undeclared group_key fails validation."""
+    definition = TemplateDefinition(
+        nodes=[
+            NodeDef(key="a", kind=NodeKind.MANUAL, name="A", group_key="ghost"),
+        ],
+        edges=[],
+        entry_keys=["a"],
+        groups=[],
+    )
+    spec = TemplateSpec(
+        slug="ghostgroup",
+        name="Ghost",
+        description=None,
+        jurisdiction=None,
+        project_type=None,
+        definition=definition,
+    )
+    with pytest.raises(ValueError, match="unknown group_key 'ghost'"):
+        register_template(spec)
+
+
+def test_duplicate_group_keys_rejected() -> None:
+    """Two groups with the same key fail validation."""
+    definition = TemplateDefinition(
+        nodes=[NodeDef(key="a", kind=NodeKind.MANUAL, name="A", group_key="g1")],
+        edges=[],
+        entry_keys=["a"],
+        groups=[
+            GroupDef(key="g1", name="First"),
+            GroupDef(key="g1", name="Dup"),
+        ],
+    )
+    spec = TemplateSpec(
+        slug="dupgroup",
+        name="Dup",
+        description=None,
+        jurisdiction=None,
+        project_type=None,
+        definition=definition,
+    )
+    with pytest.raises(ValueError, match="duplicate group keys"):
         register_template(spec)
 
 
