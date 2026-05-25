@@ -1,25 +1,20 @@
 "use client";
 
 import {
-  BadgeCheck,
-  Bot,
+  Archive,
   Calculator,
   Cog,
   Files,
   Home,
   Layers,
-  Leaf,
   MessageSquare,
   Network,
+  Package,
   Pencil,
   Play,
   PlugZap,
-  Receipt,
   ScanText,
-  Send,
-  Share2,
   Shield,
-  ShieldAlert,
   Sparkles,
   Workflow,
 } from "lucide-react";
@@ -55,40 +50,29 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
 
   const base = `/o/${slug}/projects/${projectId}`;
 
-  const work: IconRailItem[] = [
+  const morning: IconRailItem[] = [
     { key: "overview", label: "Overview", href: `${base}/overview`, icon: <Home className={ICON} /> },
     { key: "runs", label: "Runs", href: `${base}/runs`, icon: <Play className={ICON} /> },
+    { key: "communications", label: "Communications", href: `${base}/communications`, icon: <MessageSquare className={ICON} /> },
+  ];
+
+  const workbench: IconRailItem[] = [
     { key: "drawings", label: "Drawings", href: `${base}/drawings`, icon: <Pencil className={ICON} /> },
     { key: "models", label: "Models", href: `${base}/models`, icon: <Layers className={ICON} /> },
     { key: "calculations", label: "Calculations", href: `${base}/calculations`, icon: <Calculator className={ICON} /> },
     { key: "documents", label: "Documents", href: `${base}/documents`, icon: <Files className={ICON} /> },
   ];
 
-  const intelligence: IconRailItem[] = [
-    { key: "agents", label: "Agents", href: `${base}/agents`, icon: <Bot className={ICON} /> },
+  const tools: IconRailItem[] = [
+    { key: "workflows", label: "Workflows", href: `${base}/workflows`, icon: <Workflow className={ICON} /> },
     { key: "graph", label: "Graph", href: `${base}/graph`, icon: <Network className={ICON} /> },
-    { key: "codes", label: "Codes & Research", href: `${base}/codes`, icon: <ScanText className={ICON} /> },
+    { key: "research", label: "Research", href: `${base}/research`, icon: <ScanText className={ICON} /> },
+    { key: "deliverables", label: "Deliverables", href: `${base}/deliverables`, icon: <Package className={ICON} /> },
+    { key: "records", label: "Records", href: `${base}/vault`, icon: <Archive className={ICON} /> },
   ];
 
-  const collaboration: IconRailItem[] = [
-    { key: "communications", label: "Communications", href: `${base}/communications`, icon: <MessageSquare className={ICON} /> },
-    { key: "reviewers", label: "Reviewers", href: `${base}/reviewers`, icon: <BadgeCheck className={ICON} /> },
-    { key: "sharing", label: "Sharing", href: `${base}/sharing`, icon: <Share2 className={ICON} /> },
-  ];
-
-  const delivery: IconRailItem[] = [
-    { key: "deliverables", label: "Deliverables", href: `${base}/deliverables`, icon: <Workflow className={ICON} /> },
-    { key: "submissions", label: "Submissions", href: `${base}/submissions`, icon: <Send className={ICON} /> },
-    { key: "estimating", label: "Estimating", href: `${base}/estimating`, icon: <Receipt className={ICON} /> },
-    { key: "sustainability", label: "Sustainability", href: `${base}/sustainability`, icon: <Leaf className={ICON} /> },
-  ];
-
-  const trust: IconRailItem[] = [
-    { key: "quality", label: "Quality", href: `${base}/quality`, icon: <ShieldAlert className={ICON} /> },
+  const admin: IconRailItem[] = [
     { key: "audit", label: "Audit Log", href: `${base}/audit`, icon: <Shield className={ICON} /> },
-  ];
-
-  const footer: IconRailItem[] = [
     { key: "connectors", label: "Connectors", href: `${base}/connectors`, icon: <PlugZap className={ICON} /> },
     { key: "settings", label: "Project Settings", href: `${base}/settings`, icon: <Cog className={ICON} /> },
   ];
@@ -114,13 +98,11 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
         rail={
           <IconRail
             sections={[
-              { items: work },
-              { items: intelligence },
-              { items: collaboration },
-              { items: delivery },
-              { items: trust },
+              { items: morning },
+              { items: workbench },
+              { items: tools },
+              { items: admin },
             ]}
-            footer={footer}
           />
         }
       >
