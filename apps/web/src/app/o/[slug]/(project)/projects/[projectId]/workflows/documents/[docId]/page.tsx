@@ -56,7 +56,9 @@ import {
   workflowsApi,
 } from "@/lib/api";
 import { FloorReviewEditor } from "@/components/origin/FloorReviewEditor";
+import { RoofFramingEditor } from "@/components/origin/RoofFramingEditor";
 import type { Geometry } from "@/components/origin/geometry";
+import type { RoofFraming } from "@/components/origin/roof_framing";
 
 interface Props {
   params: Promise<{ slug: string; projectId: string; docId: string }>;
@@ -312,9 +314,11 @@ function DocumentEditor({ params }: Props) {
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  // When set, the canvas pane is taken over by the floor-review editor
-  // for the architectural_review node. Cleared on Save or Cancel.
-  const [reviewMode, setReviewMode] = useState<boolean>(false);
+  // When set, the canvas pane is taken over by an Origin per-node
+  // editor. "review" = architectural_review editor; "roof" = roof
+  // framing editor. Null means the React Flow graph is showing.
+  // Cleared on Save or Cancel.
+  const [reviewMode, setReviewMode] = useState<"review" | "roof" | null>(null);
   const reactFlow = useReactFlow();
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -683,7 +687,38 @@ function DocumentEditor({ params }: Props) {
           },
         );
         setActiveRun(updated);
-        setReviewMode(false);
+        setReviewMode(null);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.detail : String(err));
+        throw err;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [resolved, activeRun],
+  );
+
+  const saveRoofFraming = useCallback(
+    async (framing: RoofFraming): Promise<void> => {
+      if (!resolved || !activeRun) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const updated = await workflowsApi.advanceManual(
+          resolved.slug,
+          resolved.projectId,
+          activeRun.id,
+          "roof_framing",
+          {
+            outputs: {
+              roof_framing: framing,
+              roof_framing_at: new Date().toISOString(),
+              roof_framing_coverage_pct: framing.coverage.coverage_pct,
+            },
+          },
+        );
+        setActiveRun(updated);
+        setReviewMode(null);
       } catch (err) {
         setError(err instanceof ApiError ? err.detail : String(err));
         throw err;
@@ -906,15 +941,25 @@ function DocumentEditor({ params }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 bg-background" ref={reactFlowWrapperRef}>
-          {reviewMode && resolved && activeRun ? (
+          {reviewMode === "review" && resolved && activeRun ? (
             <FloorReviewEditor
               activeRun={activeRun}
               orgSlug={resolved.slug}
               projectId={resolved.projectId}
               runId={activeRun.id}
               busy={busy}
-              onCancel={() => setReviewMode(false)}
+              onCancel={() => setReviewMode(null)}
               onSave={saveReviewedGeometry}
+            />
+          ) : reviewMode === "roof" && resolved && activeRun ? (
+            <RoofFramingEditor
+              activeRun={activeRun}
+              orgSlug={resolved.slug}
+              projectId={resolved.projectId}
+              runId={activeRun.id}
+              busy={busy}
+              onCancel={() => setReviewMode(null)}
+              onSave={saveRoofFraming}
             />
           ) : flowNodes.length === 0 ? (
             <div className="grid h-full place-items-center px-6 text-center">
@@ -1000,9 +1045,9 @@ function DocumentEditor({ params }: Props) {
           onManualDone={() => void advanceManual(selectedFlowNode.id)}
           onApprove={() => void submitGate(selectedFlowNode.id, "approved")}
           onReject={() => void submitGate(selectedFlowNode.id, "rejected")}
-          onOpenReviewEditor={() => {
+          onOpenReviewEditor={(mode) => {
             setSelectedNodeKey(null);
-            setReviewMode(true);
+            setReviewMode(mode);
           }}
         />
       )}
@@ -1188,7 +1233,7 @@ function NodeDetailModal({
   onRename: (value: string) => void;
   onDelete: () => void;
   onManualDone: () => void;
-  onOpenReviewEditor?: (() => void) | undefined;
+  onOpenReviewEditor?: ((mode: "review" | "roof") => void) | undefined;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -1368,7 +1413,7 @@ function NodeWorkbench({
   activeRun: WorkflowRun | null;
   orgSlug: string | null;
   projectId: string | null;
-  onOpenReviewEditor?: (() => void) | undefined;
+  onOpenReviewEditor?: ((mode: "review" | "roof") => void) | undefined;
 }) {
   if (flowNode.id === "architectural_review") {
     return (
@@ -1376,7 +1421,19 @@ function NodeWorkbench({
         activeRun={activeRun}
         orgSlug={orgSlug}
         projectId={projectId}
-        onOpenReviewEditor={onOpenReviewEditor}
+        onOpenReviewEditor={
+          onOpenReviewEditor ? () => onOpenReviewEditor("review") : undefined
+        }
+      />
+    );
+  }
+  if (flowNode.id === "roof_framing") {
+    return (
+      <OriginRoofFramingPanel
+        activeRun={activeRun}
+        onOpenReviewEditor={
+          onOpenReviewEditor ? () => onOpenReviewEditor("roof") : undefined
+        }
       />
     );
   }
@@ -1385,6 +1442,63 @@ function NodeWorkbench({
       A node-specific workbench will live here. For Origin floor parse
       review, open the architectural_review node to see the parsed
       floors.
+    </div>
+  );
+}
+
+function OriginRoofFramingPanel({
+  activeRun,
+  onOpenReviewEditor,
+}: {
+  activeRun: WorkflowRun | null;
+  onOpenReviewEditor?: (() => void) | undefined;
+}) {
+  const node = activeRun?.nodes.find((n) => n.node_key === "roof_framing") ?? null;
+  const saved = node?.outputs?.roof_framing as
+    | { coverage?: { coverage_pct?: number } }
+    | undefined;
+  const pct = saved?.coverage?.coverage_pct ?? null;
+
+  const reviewNode = activeRun?.nodes.find((n) => n.node_key === "architectural_review");
+  const reviewedReady = (reviewNode?.status ?? "pending") === "completed";
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted-foreground">
+        Plan where regular trusses cover the roof. The editor enforces
+        full coverage of the roof footprint and lets you add girder
+        trusses + beams across the rest of the structure.
+      </div>
+      {pct !== null && (
+        <div
+          className={`rounded border px-3 py-1.5 text-[11px] ${
+            pct >= 100
+              ? "border-emerald-300/50 bg-emerald-50/40 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+              : pct >= 90
+                ? "border-amber-300/60 bg-amber-50/50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                : "border-destructive/40 bg-destructive/10 text-destructive"
+          }`}
+        >
+          Last saved coverage: {Math.round(pct)}%
+        </div>
+      )}
+      {!reviewedReady && (
+        <p className="text-[11px] text-muted-foreground">
+          Architectural review has not completed. The editor will fall back to
+          the raw parsed geometry; finish review for higher-fidelity edits.
+        </p>
+      )}
+      {onOpenReviewEditor && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onOpenReviewEditor}
+            className="inline-flex items-center gap-1 rounded border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:bg-accent dark:text-accent-foreground"
+          >
+            Open roof framing editor
+          </button>
+        </div>
+      )}
     </div>
   );
 }
