@@ -50,13 +50,16 @@ def clear_adapters_for_tests() -> None:
 def bootstrap_workflow_adapters() -> None:
     """Import every adapter module so its registration runs."""
     from verolas_api.workflow.adapters import (
+        origin_floor_parse as _origin_floor_parse,
+    )
+    from verolas_api.workflow.adapters import (
         origin_generator as _origin_generator,
     )
     from verolas_api.workflow.adapters import (
         statik_compile as _statik_compile,
     )
 
-    _ = (_origin_generator, _statik_compile)
+    _ = (_origin_floor_parse, _origin_generator, _statik_compile)
 
 
 __all__ = [

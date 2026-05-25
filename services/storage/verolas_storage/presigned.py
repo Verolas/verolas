@@ -229,6 +229,20 @@ class PresignedUrlService:
             kwargs["ContentType"] = content_type
         self._client.put_object(**kwargs)
 
+    def get_bytes(self, *, key: str) -> bytes:
+        """Read a small object from S3 in one shot.
+
+        Used by server-side adapters that need to parse a previously
+        uploaded artifact (e.g. the Origin floor_parse adapter reading
+        a CAD file). The CAD upload limit (`_MAX_OBJECT_SIZE_BYTES`)
+        already caps inputs at a size the api process can buffer.
+        """
+        response = self._client.get_object(Bucket=self._settings.bucket, Key=key)
+        try:
+            return response["Body"].read()
+        finally:
+            response["Body"].close()
+
 
 __all__ = [
     "PresignedDownload",
