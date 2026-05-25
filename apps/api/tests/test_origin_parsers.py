@@ -31,7 +31,7 @@ from verolas_api.workflow.origin.quality import run_all_checks
 
 def _build_synthetic_dxf() -> bytes:
     """Build a small DXF with two floors, walls, columns, openings."""
-    doc = ezdxf.new(setup=True)
+    doc = ezdxf.new(setup=True)  # type: ignore[attr-defined]
     # Tell the parser this file is in mm. Most real EU exports are mm.
     doc.header["$INSUNITS"] = 4  # mm
 
@@ -108,7 +108,7 @@ def test_dxf_quality_report_passes_on_clean_geometry() -> None:
 
 
 def test_dxf_quality_warns_when_no_roof() -> None:
-    doc = ezdxf.new(setup=True)
+    doc = ezdxf.new(setup=True)  # type: ignore[attr-defined]
     doc.header["$INSUNITS"] = 4
     doc.layers.add("WALL")
     layout = doc.layouts.new("Floor 1")

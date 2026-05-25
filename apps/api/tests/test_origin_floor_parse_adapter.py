@@ -63,7 +63,7 @@ def _reload_adapter() -> Any:
 
 
 def _synthetic_dxf_bytes() -> bytes:
-    doc = ezdxf.new(setup=True)
+    doc = ezdxf.new(setup=True)  # type: ignore[attr-defined]
     doc.header["$INSUNITS"] = 4
     doc.layers.add("WALL")
     layout = doc.layouts.new("Floor 1")
@@ -89,7 +89,7 @@ async def test_floor_parse_happy_path_writes_geometry_artifact() -> None:
     cad_key = "uploads/test/floor.dxf"
     storage.store[cad_key] = _synthetic_dxf_bytes()
     adapter = _reload_adapter()
-    result = await adapter.run(  # type: ignore[attr-defined]
+    result = await adapter.run(
         _ctx(storage=storage),
         inputs={"upload_cad": {"cad_file_key": cad_key, "cad_format": "dxf"}},
     )
@@ -126,7 +126,7 @@ async def test_floor_parse_happy_path_writes_geometry_artifact() -> None:
 @pytest.mark.asyncio
 async def test_floor_parse_errors_when_upload_missing() -> None:
     adapter = _reload_adapter()
-    result = await adapter.run(_ctx(storage=_FakeStorage()), inputs={})  # type: ignore[attr-defined]
+    result = await adapter.run(_ctx(storage=_FakeStorage()), inputs={})
     assert not result.succeeded
     assert "did not emit a cad_file_key" in (result.error or "")
 
@@ -136,7 +136,7 @@ async def test_floor_parse_errors_on_unsupported_format() -> None:
     adapter = _reload_adapter()
     storage = _FakeStorage()
     storage.store["uploads/foo.dwg"] = b"not really a dwg"
-    result = await adapter.run(  # type: ignore[attr-defined]
+    result = await adapter.run(
         _ctx(storage=storage),
         inputs={"upload_cad": {"cad_file_key": "uploads/foo.dwg", "cad_format": "dwg"}},
     )
@@ -149,7 +149,7 @@ async def test_floor_parse_errors_when_cad_bytes_invalid() -> None:
     adapter = _reload_adapter()
     storage = _FakeStorage()
     storage.store["uploads/broken.dxf"] = b"this is not a dxf file at all"
-    result = await adapter.run(  # type: ignore[attr-defined]
+    result = await adapter.run(
         _ctx(storage=storage),
         inputs={"upload_cad": {"cad_file_key": "uploads/broken.dxf", "cad_format": "dxf"}},
     )

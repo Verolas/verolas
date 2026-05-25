@@ -239,7 +239,8 @@ class PresignedUrlService:
         """
         response = self._client.get_object(Bucket=self._settings.bucket, Key=key)
         try:
-            return response["Body"].read()
+            body: bytes = response["Body"].read()
+            return body
         finally:
             response["Body"].close()
 
