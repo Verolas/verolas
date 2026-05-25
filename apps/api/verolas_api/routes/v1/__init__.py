@@ -17,6 +17,7 @@ from verolas_api.routes.v1 import (
     projects,
     runs,
     users,
+    workflows,
 )
 
 api_v1 = APIRouter(prefix="/v1")
@@ -40,3 +41,5 @@ api_v1.include_router(users.router)
 api_v1.include_router(organizations.router)
 api_v1.include_router(projects.router)
 api_v1.include_router(files.router)
+api_v1.include_router(workflows.org_workflow_router)
+api_v1.include_router(workflows.project_workflow_router)
