@@ -28,6 +28,7 @@ import {
   type DetailColumn,
   type DetailLayout,
 } from "@/components/origin/detail";
+import { Detail3DViewer } from "@/components/origin/Detail3DViewer";
 
 const Stage = dynamic(() => import("react-konva").then((m) => m.Stage), { ssr: false });
 const Layer = dynamic(() => import("react-konva").then((m) => m.Layer), { ssr: false });
@@ -102,6 +103,7 @@ export function DetailEditEditor({
     new Set(["slab", "beam", "column"]),
   );
   const [selection, setSelection] = useState<Selection>(null);
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>(
     { width: 800, height: 600 },
   );
@@ -354,11 +356,39 @@ export function DetailEditEditor({
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="inline-flex items-center rounded border border-border bg-background p-0.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setViewMode("2d")}
+              className={`rounded px-2.5 py-0.5 transition-colors ${
+                viewMode === "2d"
+                  ? "bg-brand-50 text-brand-700 dark:bg-accent dark:text-accent-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              2D
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("3d")}
+              className={`rounded px-2.5 py-0.5 transition-colors ${
+                viewMode === "3d"
+                  ? "bg-brand-50 text-brand-700 dark:bg-accent dark:text-accent-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              3D
+            </button>
+          </div>
           <button
             type="button"
             onClick={undo}
-            disabled={historyRef.current.length === 0}
-            title="Undo (Ctrl/Cmd+Z)"
+            disabled={historyRef.current.length === 0 || viewMode === "3d"}
+            title={
+              viewMode === "3d"
+                ? "Switch to 2D to edit and undo"
+                : "Undo (Ctrl/Cmd+Z)"
+            }
             className="inline-flex items-center gap-1 rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium hover:bg-surface-hover disabled:opacity-40"
           >
             <Undo2 className="size-3" aria-hidden="true" />
@@ -418,6 +448,7 @@ export function DetailEditEditor({
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+        {viewMode === "2d" && (
         <aside className="w-56 shrink-0 space-y-3 overflow-y-auto border-r border-border bg-surface px-3 py-3">
           <section>
             <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -478,9 +509,16 @@ export function DetailEditEditor({
             />
           )}
         </aside>
+        )}
 
         <div className="relative flex-1 overflow-hidden" ref={containerRef}>
-          {currentFloor && transform ? (
+          {viewMode === "3d" ? (
+            <Detail3DViewer
+              layout={layout}
+              selection={selection}
+              onSelect={(sel) => setSelection(sel)}
+            />
+          ) : currentFloor && transform ? (
             <DetailCanvas
               floor={currentFloor}
               width={containerSize.width}
