@@ -705,7 +705,38 @@ export const workflowsApi = {
       `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/artifact${qs}`,
     );
   },
+  // Trigger the Origin export pipeline at the export_seal step. The
+  // server renders DXF + PDF/A + IFC, uploads each, and returns
+  // storage keys for the engineer to mark-done with.
+  exportOriginSealPackage: (
+    slug: string,
+    projectId: string,
+    runId: string,
+    seal: OriginSealInfoBody,
+  ) =>
+    request<OriginExportResponse>(
+      `/v1/orgs/${encodeURIComponent(slug)}/projects/${projectId}/workflows/runs/${runId}/origin/export`,
+      { method: "POST", body: JSON.stringify(seal) },
+    ),
 };
+
+export interface OriginSealInfoBody {
+  engineer_name: string;
+  registration_number: string;
+  jurisdiction: string;
+  date_iso: string;
+  statement?: string;
+}
+
+export interface OriginExportResponse {
+  dwg_storage_key: string;
+  pdf_storage_key: string;
+  ifc_storage_key: string;
+  dwg_size_bytes: number;
+  pdf_size_bytes: number;
+  ifc_size_bytes: number;
+  warnings: string[];
+}
 
 export interface WorkflowArtifactUrl {
   storage_key: string;

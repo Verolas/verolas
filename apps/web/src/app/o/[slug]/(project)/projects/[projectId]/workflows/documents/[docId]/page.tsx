@@ -44,6 +44,8 @@ import {
 
 import {
   ApiError,
+  type OriginExportResponse,
+  type OriginSealInfoBody,
   type OriginStructuralOption,
   type WorkflowDocument,
   type WorkflowEdge,
@@ -1496,6 +1498,15 @@ function NodeWorkbench({
       />
     );
   }
+  if (flowNode.id === "export_seal") {
+    return (
+      <OriginExportSealPanel
+        activeRun={activeRun}
+        orgSlug={orgSlug}
+        projectId={projectId}
+      />
+    );
+  }
   return (
     <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
       A node-specific workbench will live here. For Origin floor parse
@@ -1559,6 +1570,268 @@ function OriginDetailEditPanel({
           >
             Open detail editor
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OriginExportSealPanel({
+  activeRun,
+  orgSlug,
+  projectId,
+}: {
+  activeRun: WorkflowRun | null;
+  orgSlug: string | null;
+  projectId: string | null;
+}) {
+  const [seal, setSeal] = useState<OriginSealInfoBody>({
+    engineer_name: "",
+    registration_number: "",
+    jurisdiction: "DE",
+    date_iso: new Date().toISOString().slice(0, 10),
+    statement: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<OriginExportResponse | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<{
+    dwg: string | null;
+    pdf: string | null;
+    ifc: string | null;
+  }>({ dwg: null, pdf: null, ifc: null });
+
+  // Pull any previously stored seal info / artifact keys from the
+  // export_seal node so the engineer can re-download without
+  // regenerating.
+  const sealNode = activeRun?.nodes.find((n) => n.node_key === "export_seal") ?? null;
+  const savedSeal = sealNode?.outputs?.seal_info as OriginSealInfoBody | undefined;
+  const savedKeys = sealNode?.outputs as
+    | {
+        sealed_dwg_key?: string;
+        sealed_pdf_key?: string;
+        sealed_ifc_key?: string;
+      }
+    | undefined;
+
+  // Seed form with saved values on first render with savedSeal.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!seededRef.current && savedSeal) {
+      setSeal({
+        engineer_name: savedSeal.engineer_name ?? "",
+        registration_number: savedSeal.registration_number ?? "",
+        jurisdiction: savedSeal.jurisdiction ?? "DE",
+        date_iso: savedSeal.date_iso ?? new Date().toISOString().slice(0, 10),
+        statement: savedSeal.statement ?? "",
+      });
+      seededRef.current = true;
+    }
+  }, [savedSeal]);
+
+  const canSubmit =
+    seal.engineer_name.trim() !== "" &&
+    seal.registration_number.trim() !== "" &&
+    seal.jurisdiction.trim() !== "" &&
+    seal.date_iso.trim() !== "";
+
+  const handleGenerate = useCallback(async (): Promise<void> => {
+    if (!orgSlug || !projectId || !activeRun) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await workflowsApi.exportOriginSealPackage(
+        orgSlug,
+        projectId,
+        activeRun.id,
+        seal,
+      );
+      setResult(out);
+      const [dwg, pdf, ifc] = await Promise.all([
+        workflowsApi.getArtifactUrl(orgSlug, projectId, activeRun.id, out.dwg_storage_key),
+        workflowsApi.getArtifactUrl(orgSlug, projectId, activeRun.id, out.pdf_storage_key),
+        workflowsApi.getArtifactUrl(orgSlug, projectId, activeRun.id, out.ifc_storage_key),
+      ]);
+      setPreviewUrls({ dwg: dwg.url, pdf: pdf.url, ifc: ifc.url });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [orgSlug, projectId, activeRun, seal]);
+
+  const handleSubmitDone = useCallback(async (): Promise<void> => {
+    if (!orgSlug || !projectId || !activeRun || !result) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await workflowsApi.advanceManual(orgSlug, projectId, activeRun.id, "export_seal", {
+        outputs: {
+          sealed_dwg_key: result.dwg_storage_key,
+          sealed_pdf_key: result.pdf_storage_key,
+          sealed_ifc_key: result.ifc_storage_key,
+          seal_info: seal,
+          sealed_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [orgSlug, projectId, activeRun, result, seal]);
+
+  return (
+    <div className="space-y-3 text-[11px]">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-muted-foreground">
+        Apply your professional seal, generate the DXF + PDF/A + IFC package, then mark
+        this step done to lock the sealed run for hand-off.
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          Engineer name
+          <input
+            type="text"
+            value={seal.engineer_name}
+            onChange={(e) => setSeal((p) => ({ ...p, engineer_name: e.target.value }))}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="block">
+          Registration number
+          <input
+            type="text"
+            value={seal.registration_number}
+            onChange={(e) =>
+              setSeal((p) => ({ ...p, registration_number: e.target.value }))
+            }
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="block">
+          Jurisdiction
+          <input
+            type="text"
+            value={seal.jurisdiction}
+            onChange={(e) => setSeal((p) => ({ ...p, jurisdiction: e.target.value }))}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="block">
+          Date
+          <input
+            type="date"
+            value={seal.date_iso}
+            onChange={(e) => setSeal((p) => ({ ...p, date_iso: e.target.value }))}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="col-span-2 block">
+          Seal statement (optional)
+          <textarea
+            value={seal.statement ?? ""}
+            onChange={(e) => setSeal((p) => ({ ...p, statement: e.target.value }))}
+            rows={2}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+            placeholder="e.g. Concept design sealed under HOAI LP2."
+          />
+        </label>
+      </div>
+
+      {error && (
+        <p className="rounded border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void handleGenerate()}
+          disabled={busy || !canSubmit}
+          className="inline-flex items-center gap-1 rounded border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 dark:bg-accent dark:text-accent-foreground"
+        >
+          {busy ? "Working..." : result ? "Regenerate package" : "Generate sealed package"}
+        </button>
+        {result && (
+          <button
+            type="button"
+            onClick={() => void handleSubmitDone()}
+            disabled={busy}
+            className="inline-flex items-center gap-1 rounded border border-emerald-300/40 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+          >
+            Mark export_seal done
+          </button>
+        )}
+      </div>
+
+      {result && (
+        <div className="space-y-1 rounded border border-border bg-surface px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Generated package
+          </div>
+          {result.warnings.length > 0 && (
+            <ul className="space-y-0.5 text-[10px] text-amber-700 dark:text-amber-300">
+              {result.warnings.map((w, i) => (
+                <li key={i}>! {w}</li>
+              ))}
+            </ul>
+          )}
+          <ul className="space-y-0.5">
+            <li>
+              DXF ({Math.round(result.dwg_size_bytes / 1024)} kB):{" "}
+              {previewUrls.dwg ? (
+                <a
+                  className="text-brand-700 hover:underline dark:text-accent-foreground"
+                  href={previewUrls.dwg}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  download
+                </a>
+              ) : (
+                <span className="text-muted-foreground">link pending</span>
+              )}
+            </li>
+            <li>
+              PDF/A ({Math.round(result.pdf_size_bytes / 1024)} kB):{" "}
+              {previewUrls.pdf ? (
+                <a
+                  className="text-brand-700 hover:underline dark:text-accent-foreground"
+                  href={previewUrls.pdf}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  download
+                </a>
+              ) : (
+                <span className="text-muted-foreground">link pending</span>
+              )}
+            </li>
+            <li>
+              IFC ({Math.round(result.ifc_size_bytes / 1024)} kB):{" "}
+              {previewUrls.ifc ? (
+                <a
+                  className="text-brand-700 hover:underline dark:text-accent-foreground"
+                  href={previewUrls.ifc}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  download
+                </a>
+              ) : (
+                <span className="text-muted-foreground">link pending</span>
+              )}
+            </li>
+          </ul>
+        </div>
+      )}
+
+      {!result && savedKeys?.sealed_pdf_key && (
+        <div className="rounded border border-border bg-surface px-3 py-2 text-muted-foreground">
+          A sealed package was generated previously. Click Generate to refresh, or
+          download the saved artifacts from the run&apos;s artifact endpoint.
         </div>
       )}
     </div>
