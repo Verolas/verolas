@@ -346,6 +346,40 @@ export const connectorsApi = {
     ),
 };
 
+export interface Bridge {
+  id: string;
+  org_id: string;
+  name: string;
+  status: "pending" | "active" | "offline" | "revoked";
+  supported_tools: string[];
+  hostname: string | null;
+  agent_version: string | null;
+  last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BridgeEnrollResult {
+  bridge_id: string;
+  name: string;
+  token: string;
+  api_base_url: string;
+}
+
+export const bridgesApi = {
+  list: (slug: string) =>
+    request<Bridge[]>(`/v1/orgs/${encodeURIComponent(slug)}/bridges`),
+  enroll: (slug: string, name: string, supportedTools: string[]) =>
+    request<BridgeEnrollResult>(`/v1/orgs/${encodeURIComponent(slug)}/bridges`, {
+      method: "POST",
+      body: JSON.stringify({ name, supported_tools: supportedTools }),
+    }),
+  revoke: (slug: string, bridgeId: string) =>
+    request<void>(`/v1/orgs/${encodeURIComponent(slug)}/bridges/${bridgeId}`, {
+      method: "DELETE",
+    }),
+};
+
 export type ProjectFileKind =
   | "office_macro"
   | "office_plain"
