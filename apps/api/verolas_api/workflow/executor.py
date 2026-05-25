@@ -119,14 +119,17 @@ def advance(definition: TemplateDefinition, nodes: dict[NodeKey, NodeState]) -> 
                 )
             )
 
-    # Pass 2: automated nodes that are READY complete immediately. Until
-    # stage 6 wires real tool calls, the placeholder behaviour is to
-    # emit a completion event with the node params and move on.
+    # Pass 2: automated nodes that are READY and have NO tool reference
+    # in their params complete immediately as a placeholder. Nodes that
+    # specify a tool are left for the runs service to dispatch to a
+    # registered adapter; if no adapter is registered for that tool the
+    # runs service still falls back to a placeholder completion so the
+    # workflow never gets stuck.
     for node_key, state in nodes.items():
         if state.status is not NodeStatus.READY:
             continue
         node_def = node_by_key[node_key]
-        if node_def.kind is NodeKind.AUTOMATED:
+        if node_def.kind is NodeKind.AUTOMATED and not node_def.params.get("tool"):
             transitions.append(
                 Transition(
                     node_key=node_key,

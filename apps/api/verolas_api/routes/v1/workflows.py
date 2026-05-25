@@ -15,10 +15,10 @@ makes sense in URL form.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from verolas_api.dependencies.org import DbOrgConn
@@ -122,6 +122,11 @@ def _project_id(value: str) -> UUID:
         ) from exc
 
 
+def _storage(request: Request) -> Any:
+    """Fetch the storage service from app.state; None when not configured."""
+    return getattr(request.app.state, "storage_service", None)
+
+
 # Org-level routes.
 
 
@@ -146,6 +151,7 @@ async def list_workflow_templates(
 )
 @sla_tier(1)
 async def create_workflow_run(
+    request: Request,
     project_id: Annotated[str, Path()],
     body: WorkflowRunCreateBody,
     deps: DbOrgConn,
@@ -157,6 +163,7 @@ async def create_workflow_run(
     """
     conn, ctx = deps
     pid = _project_id(project_id)
+    storage = _storage(request)
 
     if (body.template_slug is None) == (body.document_id is None):
         raise HTTPException(
@@ -172,6 +179,7 @@ async def create_workflow_run(
                 project_id=pid,
                 template_slug=body.template_slug,
                 started_by_user_id=ctx.user_id,
+                storage=storage,
             )
         assert body.document_id is not None
         return await runs_service.create_run_from_document(
@@ -180,6 +188,7 @@ async def create_workflow_run(
             project_id=pid,
             document_id=body.document_id,
             started_by_user_id=ctx.user_id,
+            storage=storage,
         )
     except TemplateNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -351,6 +360,7 @@ async def get_workflow_run(
 )
 @sla_tier(1)
 async def advance_workflow_node(
+    request: Request,
     project_id: Annotated[str, Path()],
     run_id: Annotated[UUID, Path()],
     node_key: Annotated[str, Path(min_length=1, max_length=64)],
@@ -363,7 +373,8 @@ async def advance_workflow_node(
     - For manual: include `manual: {outputs}` (outputs optional).
     """
     conn, ctx = deps
-    _ = _project_id(project_id)
+    pid = _project_id(project_id)
+    storage = _storage(request)
 
     if (body.gate is None) == (body.manual is None):
         raise HTTPException(
@@ -381,6 +392,8 @@ async def advance_workflow_node(
                 decision=body.gate.decision,
                 note=body.gate.note,
                 actor_user_id=ctx.user_id,
+                storage=storage,
+                project_id=pid,
             )
         assert body.manual is not None
         return await runs_service.mark_manual_done(
@@ -390,6 +403,8 @@ async def advance_workflow_node(
             node_key=node_key,
             outputs=body.manual.outputs,
             actor_user_id=ctx.user_id,
+            storage=storage,
+            project_id=pid,
         )
     except RunNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

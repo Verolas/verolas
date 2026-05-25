@@ -27,6 +27,7 @@ from verolas_api.routes.v1 import api_v1
 from verolas_api.settings import Settings
 from verolas_api.vendors import bootstrap_vendors
 from verolas_api.workflow import bootstrap_workflow_templates
+from verolas_api.workflow.adapters import bootstrap_workflow_adapters
 from verolas_api.workflow.sync import sync_code_templates
 
 # Force vendor adapters to register their fetchers with
@@ -37,6 +38,10 @@ bootstrap_vendors()
 # registry. Sync to Postgres happens inside the lifespan once the pool
 # is open.
 bootstrap_workflow_templates()
+
+# Force workflow node-adapter modules to register so the runs service
+# can dispatch real work for AUTOMATED nodes that name a tool.
+bootstrap_workflow_adapters()
 
 
 def create_app(
