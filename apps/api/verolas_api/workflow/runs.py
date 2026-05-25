@@ -21,7 +21,10 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
+from verolas_storage import PresignedUrlService
 
+from verolas_api.workflow.adapters import get_adapter
+from verolas_api.workflow.adapters.base import AdapterContext
 from verolas_api.workflow.executor import (
     NodeState,
     Transition,
@@ -128,6 +131,7 @@ async def create_run(
     project_id: UUID,
     template_slug: str,
     started_by_user_id: UUID,
+    storage: PresignedUrlService | None = None,
 ) -> RunView:
     """Create a new run for `project_id` from the named template.
 
@@ -188,7 +192,12 @@ async def create_run(
         )
 
     await _advance_until_blocked(
-        conn, org_id=org_id, run_id=run_id, actor_user_id=started_by_user_id
+        conn,
+        org_id=org_id,
+        project_id=project_id,
+        run_id=run_id,
+        actor_user_id=started_by_user_id,
+        storage=storage,
     )
     return await get_run(conn, run_id=run_id)
 
@@ -200,6 +209,7 @@ async def create_run_from_document(
     project_id: UUID,
     document_id: UUID,
     started_by_user_id: UUID,
+    storage: PresignedUrlService | None = None,
 ) -> RunView:
     """Create a run from a project-scoped workflow document.
 
@@ -277,7 +287,12 @@ async def create_run_from_document(
         )
 
     await _advance_until_blocked(
-        conn, org_id=org_id, run_id=run_id, actor_user_id=started_by_user_id
+        conn,
+        org_id=org_id,
+        project_id=project_id,
+        run_id=run_id,
+        actor_user_id=started_by_user_id,
+        storage=storage,
     )
     return await get_run(conn, run_id=run_id)
 
@@ -388,6 +403,8 @@ async def mark_manual_done(
     node_key: str,
     actor_user_id: UUID,
     outputs: dict[str, Any] | None = None,
+    storage: PresignedUrlService | None = None,
+    project_id: UUID | None = None,
 ) -> RunView:
     """Mark a MANUAL node done, then re-advance the run."""
     _definition, states = await _load_run_state(conn, run_id)
@@ -399,7 +416,15 @@ async def mark_manual_done(
         transitions=transitions,
         actor_user_id=actor_user_id,
     )
-    await _advance_until_blocked(conn, org_id=org_id, run_id=run_id, actor_user_id=actor_user_id)
+    pid = project_id or await _project_id_for_run(conn, run_id)
+    await _advance_until_blocked(
+        conn,
+        org_id=org_id,
+        project_id=pid,
+        run_id=run_id,
+        actor_user_id=actor_user_id,
+        storage=storage,
+    )
     return await get_run(conn, run_id=run_id)
 
 
@@ -412,6 +437,8 @@ async def submit_gate_decision(
     decision: str,
     note: str | None,
     actor_user_id: UUID,
+    storage: PresignedUrlService | None = None,
+    project_id: UUID | None = None,
 ) -> RunView:
     """Process an approve/reject decision on a gate node."""
     _, states = await _load_run_state(conn, run_id)
@@ -434,8 +461,14 @@ async def submit_gate_decision(
             forced=RunStatus.FAILED,
         )
     else:
+        pid = project_id or await _project_id_for_run(conn, run_id)
         await _advance_until_blocked(
-            conn, org_id=org_id, run_id=run_id, actor_user_id=actor_user_id
+            conn,
+            org_id=org_id,
+            project_id=pid,
+            run_id=run_id,
+            actor_user_id=actor_user_id,
+            storage=storage,
         )
     return await get_run(conn, run_id=run_id)
 
@@ -492,27 +525,211 @@ async def cancel_run(
 
 
 async def _advance_until_blocked(
-    conn: AsyncConnection, *, org_id: UUID, run_id: UUID, actor_user_id: UUID
+    conn: AsyncConnection,
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    run_id: UUID,
+    actor_user_id: UUID,
+    storage: PresignedUrlService | None = None,
 ) -> None:
-    """Run executor.advance in a loop until no more transitions emerge.
+    """Drive the run forward until it blocks on human input or completes.
 
-    Bounded iteration so a buggy template cannot infinite-loop. The
-    DAG-only invariant in v1 guarantees finitely many transitions, but
-    we cap defensively.
+    Each loop iteration:
+    1. Dispatches adapters for any READY automated nodes whose
+       `params.tool` matches a registered adapter. Adapters can either
+       complete the node (status=completed, outputs recorded) or fail
+       it (status=failed, error recorded).
+    2. Calls the pure executor's `advance` to promote downstream PENDING
+       nodes whose upstream just completed, and to placeholder-complete
+       any AUTOMATED node that has no `tool` param.
+
+    The loop breaks when neither step produced transitions. Bounded
+    iteration so a buggy template cannot infinite-loop.
     """
     for _ in range(1024):
-        definition, states = await _load_run_state(conn, run_id)
-        transitions = advance(definition, states)
-        if not transitions:
-            break
-        await _apply_transitions(
+        # Step 1: adapter dispatch.
+        dispatch_transitions = await _dispatch_ready_adapters(
             conn,
             org_id=org_id,
+            project_id=project_id,
             run_id=run_id,
-            transitions=transitions,
-            actor_user_id=actor_user_id,
+            storage=storage,
         )
+        if dispatch_transitions:
+            await _apply_transitions(
+                conn,
+                org_id=org_id,
+                run_id=run_id,
+                transitions=dispatch_transitions,
+                actor_user_id=actor_user_id,
+            )
+
+        # Step 2: pure executor pass.
+        definition, states = await _load_run_state(conn, run_id)
+        transitions = advance(definition, states)
+        if transitions:
+            await _apply_transitions(
+                conn,
+                org_id=org_id,
+                run_id=run_id,
+                transitions=transitions,
+                actor_user_id=actor_user_id,
+            )
+
+        if not dispatch_transitions and not transitions:
+            break
+
     await _finalize_run_status(conn, run_id=run_id, org_id=org_id, actor_user_id=actor_user_id)
+
+
+async def _dispatch_ready_adapters(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    run_id: UUID,
+    storage: PresignedUrlService | None,
+) -> list[Transition]:
+    """Run any registered adapters for READY automated nodes.
+
+    For each such node:
+    - If `params.tool` is unset, skip (the executor placeholder pass
+      will handle it).
+    - If `params.tool` is set but no adapter is registered, emit a
+      placeholder completion with an event noting the missing adapter.
+    - If a registered adapter exists, gather upstream node outputs and
+      invoke `adapter.run(ctx, inputs)`. Translate the result into a
+      completed or failed transition.
+
+    Returns the list of transitions to apply; the caller emits them via
+    `_apply_transitions` and re-loads run state before the next pass.
+    """
+    definition, states = await _load_run_state(conn, run_id)
+    transitions: list[Transition] = []
+
+    # Build upstream-key lookup once.
+    upstream_keys: dict[NodeKey, list[NodeKey]] = {n.key: [] for n in definition.nodes}
+    for edge in definition.edges:
+        upstream_keys[edge.to_key].append(edge.from_key)
+
+    # Map node_key -> NodeDef for params + lookups.
+    node_def_by_key = {n.key: n for n in definition.nodes}
+
+    # Load all completed-or-similar nodes' outputs in one query so we
+    # can hand them to adapters as inputs.
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            SELECT id, node_key, status, outputs FROM workflow_run_nodes
+            WHERE run_id = %s
+            """,
+            (run_id,),
+        )
+        rows = await cur.fetchall()
+
+    outputs_by_key = {r["node_key"]: (r["outputs"] or {}) for r in rows}
+    node_id_by_key = {r["node_key"]: r["id"] for r in rows}
+
+    for node_key, state in states.items():
+        if state.status is not NodeStatus.READY:
+            continue
+        if state.kind is not NodeKind.AUTOMATED:
+            continue
+        node_def = node_def_by_key[node_key]
+        tool = node_def.params.get("tool")
+        if not tool:
+            # Pure executor placeholder path; nothing to dispatch.
+            continue
+
+        adapter = get_adapter(tool)
+        if adapter is None:
+            transitions.append(
+                Transition(
+                    node_key=node_key,
+                    new_status=NodeStatus.COMPLETED,
+                    event_type="node.completed",
+                    event_payload={
+                        "reason": "adapter_missing_placeholder",
+                        "tool": tool,
+                    },
+                )
+            )
+            continue
+
+        # Run the adapter. Inputs are upstream node outputs by node_key.
+        inputs = {ukey: outputs_by_key.get(ukey, {}) for ukey in upstream_keys[node_key]}
+        ctx = AdapterContext(
+            org_id=org_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_id=node_id_by_key[node_key],
+            node_key=node_key,
+            params=dict(node_def.params),
+            storage=storage,
+        )
+        try:
+            result = await adapter.run(ctx, inputs)
+        except Exception as exc:
+            transitions.append(
+                Transition(
+                    node_key=node_key,
+                    new_status=NodeStatus.FAILED,
+                    event_type="node.failed",
+                    event_payload={"tool": tool, "exception": str(exc)},
+                )
+            )
+            continue
+
+        if result.succeeded:
+            payload = {
+                "tool": tool,
+                "artifacts": [
+                    {
+                        "storage_key": a.storage_key,
+                        "content_type": a.content_type,
+                        "size_bytes": a.size_bytes,
+                        "label": a.label,
+                    }
+                    for a in result.artifacts
+                ],
+            }
+            transitions.append(
+                Transition(
+                    node_key=node_key,
+                    new_status=NodeStatus.COMPLETED,
+                    event_type="node.completed",
+                    event_payload=payload,
+                    outputs=result.outputs,
+                )
+            )
+        else:
+            transitions.append(
+                Transition(
+                    node_key=node_key,
+                    new_status=NodeStatus.FAILED,
+                    event_type="node.failed",
+                    event_payload={"tool": tool, "error": result.error},
+                )
+            )
+
+    return transitions
+
+
+async def _project_id_for_run(conn: AsyncConnection, run_id: UUID) -> UUID:
+    """Resolve the project_id for a run. Used by code paths that did not
+    receive it explicitly (mark_manual_done, submit_gate_decision)."""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            "SELECT project_id FROM workflow_runs WHERE id = %s",
+            (run_id,),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        raise RunNotFound(f"run {run_id} not found")
+    pid = row["project_id"]
+    assert isinstance(pid, UUID)
+    return pid
 
 
 async def _finalize_run_status(
