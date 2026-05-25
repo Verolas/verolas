@@ -50,8 +50,9 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
 
   const base = `/o/${slug}/projects/${projectId}`;
 
-  const morning: IconRailItem[] = [
+  const command: IconRailItem[] = [
     { key: "overview", label: "Overview", href: `${base}/overview`, icon: <Home className={ICON} /> },
+    { key: "workflows", label: "Workflows", href: `${base}/workflows`, icon: <Workflow className={ICON} /> },
     { key: "runs", label: "Runs", href: `${base}/runs`, icon: <Play className={ICON} /> },
     { key: "communications", label: "Communications", href: `${base}/communications`, icon: <MessageSquare className={ICON} /> },
   ];
@@ -63,11 +64,10 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
     { key: "documents", label: "Documents", href: `${base}/documents`, icon: <Files className={ICON} /> },
   ];
 
-  const tools: IconRailItem[] = [
-    { key: "workflows", label: "Workflows", href: `${base}/workflows`, icon: <Workflow className={ICON} /> },
+  const outputs: IconRailItem[] = [
+    { key: "deliverables", label: "Deliverables", href: `${base}/deliverables`, icon: <Package className={ICON} /> },
     { key: "graph", label: "Graph", href: `${base}/graph`, icon: <Network className={ICON} /> },
     { key: "research", label: "Research", href: `${base}/research`, icon: <ScanText className={ICON} /> },
-    { key: "deliverables", label: "Deliverables", href: `${base}/deliverables`, icon: <Package className={ICON} /> },
     { key: "records", label: "Records", href: `${base}/vault`, icon: <Archive className={ICON} /> },
   ];
 
@@ -98,9 +98,9 @@ export function ProjectShell({ slug, projectId, projectName, children }: Props) 
         rail={
           <IconRail
             sections={[
-              { items: morning },
+              { items: command },
               { items: workbench },
-              { items: tools },
+              { items: outputs },
               { items: admin },
             ]}
           />
