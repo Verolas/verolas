@@ -26,10 +26,17 @@ from verolas_api.routes import health
 from verolas_api.routes.v1 import api_v1
 from verolas_api.settings import Settings
 from verolas_api.vendors import bootstrap_vendors
+from verolas_api.workflow import bootstrap_workflow_templates
+from verolas_api.workflow.sync import sync_code_templates
 
 # Force vendor adapters to register their fetchers with
 # verolas_api.connector_instances before the first request.
 bootstrap_vendors()
+
+# Force workflow template modules to register with the in-process
+# registry. Sync to Postgres happens inside the lifespan once the pool
+# is open.
+bootstrap_workflow_templates()
 
 
 def create_app(
@@ -86,6 +93,20 @@ def create_app(
             owns_pool = True
         elif db_pool is not None:
             app.state.db_pool = db_pool
+
+        # Sync code-authored workflow templates into Postgres. This is
+        # idempotent: unchanged templates produce no new version rows.
+        if hasattr(app.state, "db_pool"):
+            try:
+                await sync_code_templates(app.state.db_pool)
+            except Exception:
+                # Sync failure should not prevent the app from booting;
+                # the existing templates in DB remain available. Log the
+                # exception and continue.
+                import logging as _logging
+
+                _logging.getLogger(__name__).exception("workflow_template_sync.failed")
+
         try:
             yield
         finally:
