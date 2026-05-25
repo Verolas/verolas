@@ -27,6 +27,13 @@ WORKDIR /workspace/apps/web
 
 RUN pnpm build
 
+# Next.js's standalone tracer pulls in the @esbuild platform binaries as a
+# transitive build-time dep of PostCSS / Tailwind plugins. Those binaries are
+# Go executables that never run inside the Next.js server, but Trivy flags
+# their bundled Go stdlib for every Go CVE released since the binary was
+# built. Drop them from the runtime payload.
+RUN find .next/standalone -type d \( -name "@esbuild" -o -name "@esbuild+*" \) -prune -exec rm -rf {} +
+
 FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runtime
 
 ENV NODE_ENV=production \
