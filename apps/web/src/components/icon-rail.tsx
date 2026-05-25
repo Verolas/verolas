@@ -16,6 +16,8 @@ export interface IconRailItem {
 }
 
 export interface IconRailSection {
+  /** Optional label shown above the section when the rail is expanded. */
+  title?: string;
   items: IconRailItem[];
 }
 
@@ -57,6 +59,16 @@ export function IconRail({ sections, footer, activeKey }: IconRailProps) {
         <nav className="flex-1 overflow-hidden py-2">
           {sections.map((section, index) => (
             <div key={index} className={index > 0 ? "mt-2 border-t border-border pt-2" : ""}>
+              {section.title ? (
+                <p
+                  className={cn(
+                    "px-3 pb-1 pt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground transition-opacity duration-100",
+                    open ? "opacity-100" : "pointer-events-none opacity-0",
+                  )}
+                >
+                  {section.title}
+                </p>
+              ) : null}
               {section.items.map((item) => (
                 <RailLink
                   key={item.key}
