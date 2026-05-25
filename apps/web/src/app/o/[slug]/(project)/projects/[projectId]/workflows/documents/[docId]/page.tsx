@@ -55,6 +55,8 @@ import {
   workflowDocumentsApi,
   workflowsApi,
 } from "@/lib/api";
+import { FloorReviewEditor } from "@/components/origin/FloorReviewEditor";
+import type { Geometry } from "@/components/origin/geometry";
 
 interface Props {
   params: Promise<{ slug: string; projectId: string; docId: string }>;
@@ -310,6 +312,9 @@ function DocumentEditor({ params }: Props) {
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // When set, the canvas pane is taken over by the floor-review editor
+  // for the architectural_review node. Cleared on Save or Cancel.
+  const [reviewMode, setReviewMode] = useState<boolean>(false);
   const reactFlow = useReactFlow();
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -659,6 +664,36 @@ function DocumentEditor({ params }: Props) {
     [setFlowNodes, setFlowEdges],
   );
 
+  const saveReviewedGeometry = useCallback(
+    async (reviewed: Geometry): Promise<void> => {
+      if (!resolved || !activeRun) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const updated = await workflowsApi.advanceManual(
+          resolved.slug,
+          resolved.projectId,
+          activeRun.id,
+          "architectural_review",
+          {
+            outputs: {
+              reviewed_geometry: reviewed,
+              reviewed_at: new Date().toISOString(),
+            },
+          },
+        );
+        setActiveRun(updated);
+        setReviewMode(false);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.detail : String(err));
+        throw err;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [resolved, activeRun],
+  );
+
   const selectedFlowNode = useMemo(() => {
     if (!selectedNodeKey) return null;
     return flowNodes.find((n) => n.id === selectedNodeKey) ?? null;
@@ -871,7 +906,17 @@ function DocumentEditor({ params }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 bg-background" ref={reactFlowWrapperRef}>
-          {flowNodes.length === 0 ? (
+          {reviewMode && resolved && activeRun ? (
+            <FloorReviewEditor
+              activeRun={activeRun}
+              orgSlug={resolved.slug}
+              projectId={resolved.projectId}
+              runId={activeRun.id}
+              busy={busy}
+              onCancel={() => setReviewMode(false)}
+              onSave={saveReviewedGeometry}
+            />
+          ) : flowNodes.length === 0 ? (
             <div className="grid h-full place-items-center px-6 text-center">
               <div className="max-w-md">
                 <WorkflowIcon
@@ -955,6 +1000,10 @@ function DocumentEditor({ params }: Props) {
           onManualDone={() => void advanceManual(selectedFlowNode.id)}
           onApprove={() => void submitGate(selectedFlowNode.id, "approved")}
           onReject={() => void submitGate(selectedFlowNode.id, "rejected")}
+          onOpenReviewEditor={() => {
+            setSelectedNodeKey(null);
+            setReviewMode(true);
+          }}
         />
       )}
     </div>
@@ -1125,6 +1174,7 @@ function NodeDetailModal({
   onManualDone,
   onApprove,
   onReject,
+  onOpenReviewEditor,
 }: {
   flowNode: FlowNode;
   runNode: WorkflowRunNode | null;
@@ -1138,6 +1188,7 @@ function NodeDetailModal({
   onRename: (value: string) => void;
   onDelete: () => void;
   onManualDone: () => void;
+  onOpenReviewEditor?: (() => void) | undefined;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -1229,6 +1280,7 @@ function NodeDetailModal({
             activeRun={activeRun}
             orgSlug={orgSlug}
             projectId={projectId}
+            onOpenReviewEditor={onOpenReviewEditor}
           />
 
           {showManualAction && (
@@ -1310,11 +1362,13 @@ function NodeWorkbench({
   activeRun,
   orgSlug,
   projectId,
+  onOpenReviewEditor,
 }: {
   flowNode: FlowNode;
   activeRun: WorkflowRun | null;
   orgSlug: string | null;
   projectId: string | null;
+  onOpenReviewEditor?: (() => void) | undefined;
 }) {
   if (flowNode.id === "architectural_review") {
     return (
@@ -1322,6 +1376,7 @@ function NodeWorkbench({
         activeRun={activeRun}
         orgSlug={orgSlug}
         projectId={projectId}
+        onOpenReviewEditor={onOpenReviewEditor}
       />
     );
   }
@@ -1368,10 +1423,12 @@ function OriginFloorGallery({
   activeRun,
   orgSlug,
   projectId,
+  onOpenReviewEditor,
 }: {
   activeRun: WorkflowRun | null;
   orgSlug: string | null;
   projectId: string | null;
+  onOpenReviewEditor?: (() => void) | undefined;
 }) {
   const floorParseNode = useMemo(
     () => activeRun?.nodes.find((n) => n.node_key === "floor_parse") ?? null,
@@ -1450,6 +1507,18 @@ function OriginFloorGallery({
           />
         ))}
       </div>
+
+      {onOpenReviewEditor && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onOpenReviewEditor}
+            className="inline-flex items-center gap-1 rounded border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:bg-accent dark:text-accent-foreground"
+          >
+            Open architectural review editor
+          </button>
+        </div>
+      )}
     </div>
   );
 }
