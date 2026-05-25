@@ -44,6 +44,7 @@ import {
 
 import {
   ApiError,
+  type OriginStructuralOption,
   type WorkflowDocument,
   type WorkflowEdge,
   type WorkflowGroup,
@@ -1437,6 +1438,9 @@ function NodeWorkbench({
       />
     );
   }
+  if (flowNode.id === "select_option") {
+    return <OriginSelectOptionPanel activeRun={activeRun} />;
+  }
   return (
     <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
       A node-specific workbench will live here. For Origin floor parse
@@ -1499,6 +1503,206 @@ function OriginRoofFramingPanel({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Origin select_option workbench. Reads the three structural options
+// emitted by ai_options.outputs and renders them as side-by-side cards
+// matching Genia's three-option modal: takeoff, DCR distribution,
+// constructibility. The Approve/Reject buttons live on the node detail
+// modal proper; this panel makes the choice informed by surfacing the
+// numbers the engineer needs to compare.
+function OriginSelectOptionPanel({
+  activeRun,
+}: {
+  activeRun: WorkflowRun | null;
+}) {
+  const aiNode = activeRun?.nodes.find((n) => n.node_key === "ai_options") ?? null;
+  const options = (aiNode?.outputs?.options as OriginStructuralOption[] | undefined) ?? [];
+  const note = aiNode?.outputs?.note as string | undefined;
+  const model = aiNode?.outputs?.model as string | undefined;
+
+  if (!aiNode) {
+    return (
+      <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+        ai_options has not run yet on this workflow. Start a run from
+        this document so the AI shortlist appears here.
+      </div>
+    );
+  }
+  if (aiNode.status !== "completed") {
+    return (
+      <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+        ai_options status: <span className="uppercase">{aiNode.status}</span>.{" "}
+        {aiNode.error ?? "Waiting for the design engine to finish."}
+      </div>
+    );
+  }
+  if (options.length === 0) {
+    return (
+      <div className="rounded border border-dashed border-border bg-surface p-6 text-center text-xs text-muted-foreground">
+        ai_options completed but produced no options. Check the architectural
+        review and roof framing steps; rerun ai_options.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-muted-foreground">
+        Pick which option proceeds to detail-edit and seal. Use the Approve
+        button below and record the option_id in the note field.
+        {model === "engine"
+          ? " (LLM polish is off; structural numbers come from the deterministic engine.)"
+          : null}
+      </p>
+      {note && (
+        <p className="rounded border border-border bg-surface px-3 py-1.5 text-[11px] text-muted-foreground">
+          {note}
+        </p>
+      )}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {options.map((opt) => (
+          <OriginOptionCard key={opt.option_id} option={opt} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OriginOptionCard({ option }: { option: OriginStructuralOption }) {
+  const dcr = option.dcr_distribution;
+  return (
+    <div className="flex flex-col gap-2 rounded border border-border bg-background p-3 text-[11px]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          {option.variant}
+        </span>
+        <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-mono">
+          {option.option_id}
+        </span>
+      </div>
+      <div className="text-sm font-semibold text-foreground">
+        {option.primary_structure}
+      </div>
+      <p className="text-foreground-light">{option.summary}</p>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+        <dt className="text-muted-foreground">Bay grid</dt>
+        <dd className="text-right">
+          {option.bay_grid_m.x_m.toFixed(1)} x {option.bay_grid_m.y_m.toFixed(1)} m
+        </dd>
+        <dt className="text-muted-foreground">Slab</dt>
+        <dd className="text-right">{option.slab_type}</dd>
+        <dt className="text-muted-foreground">Material</dt>
+        <dd className="text-right">{option.material}</dd>
+        <dt className="text-muted-foreground">Prelim load</dt>
+        <dd className="text-right">{option.prelim_load_kN_m2.toFixed(1)} kN/m²</dd>
+        <dt className="text-muted-foreground">BoQ</dt>
+        <dd className="text-right">€{Math.round(option.boq_estimate_eur_m2)} /m²</dd>
+        <dt className="text-muted-foreground">Total BoQ</dt>
+        <dd className="text-right">€{Math.round(option.boq_total_eur).toLocaleString()}</dd>
+      </dl>
+
+      <div>
+        <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Material takeoff
+        </div>
+        <ul className="space-y-0.5 text-[10px]">
+          {option.takeoff.structural_steel_kg > 0 && (
+            <li>
+              Steel: {Math.round(option.takeoff.structural_steel_kg).toLocaleString()} kg
+            </li>
+          )}
+          {option.takeoff.concrete_m3 > 0 && (
+            <li>Concrete: {option.takeoff.concrete_m3.toFixed(1)} m³</li>
+          )}
+          {option.takeoff.rebar_kg > 0 && (
+            <li>Rebar: {Math.round(option.takeoff.rebar_kg).toLocaleString()} kg</li>
+          )}
+          {option.takeoff.clt_m3 > 0 && (
+            <li>CLT: {option.takeoff.clt_m3.toFixed(1)} m³</li>
+          )}
+          {option.takeoff.glulam_m3 > 0 && (
+            <li>Glulam: {option.takeoff.glulam_m3.toFixed(1)} m³</li>
+          )}
+        </ul>
+      </div>
+
+      <div>
+        <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          DCR distribution
+        </div>
+        <DcrBar dcr={dcr} />
+      </div>
+
+      <div>
+        <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Constructibility
+        </div>
+        <p className="text-[10px]">
+          {option.constructibility.total_unique_sizes} unique sections (
+          {option.constructibility.unique_beam_sizes} beam,{" "}
+          {option.constructibility.unique_column_sizes} column)
+        </p>
+      </div>
+
+      <div>
+        <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Sustainability
+        </div>
+        <p className="text-[10px] text-foreground-light">
+          {option.sustainability_note}
+        </p>
+      </div>
+
+      {option.caveats.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Caveats
+          </div>
+          <ul className="list-disc space-y-0.5 pl-4 text-[10px] text-foreground-light">
+            {option.caveats.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DcrBar({ dcr }: { dcr: OriginStructuralOption["dcr_distribution"] }) {
+  // Inline-svg horizontal stacked bar showing DCR distribution.
+  const segments = [
+    { label: "<60", value: dcr.under_60_pct, color: "#7BB39C" },
+    { label: "60-80", value: dcr.between_60_80, color: "#C1A857" },
+    { label: "80-100", value: dcr.between_80_100, color: "#C77F49" },
+    { label: ">100", value: dcr.over_100, color: "#C0463E" },
+  ];
+  const total = Math.max(0.0001, segments.reduce((s, x) => s + x.value, 0));
+  let cumulative = 0;
+  return (
+    <div className="space-y-1">
+      <svg viewBox="0 0 100 6" width="100%" height="14" preserveAspectRatio="none">
+        {segments.map((seg) => {
+          const w = (seg.value / total) * 100;
+          const x = cumulative;
+          cumulative += w;
+          return <rect key={seg.label} x={x} y={0} width={w} height={6} fill={seg.color} />;
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-x-2 text-[9px] text-muted-foreground">
+        {segments.map((seg) => (
+          <span key={seg.label} className="inline-flex items-center gap-1">
+            <span
+              className="inline-block size-2 rounded-sm"
+              style={{ backgroundColor: seg.color }}
+            />
+            {seg.label}: {Math.round(seg.value * 100)}%
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

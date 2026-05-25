@@ -724,6 +724,45 @@ export interface FloorSvgEntry {
   svg_inline?: string;
 }
 
+// Origin AI options payload from the ai_options node's outputs.
+// Mirrors verolas_api.workflow.origin.grid.StructuralOption.
+export interface OriginStructuralOption {
+  option_id: string;
+  variant: "optimized" | "balanced" | "conservative";
+  summary: string;
+  bay_grid_m: { x_m: number; y_m: number };
+  slab_type: string;
+  primary_structure: string;
+  material: string;
+  prelim_load_kN_m2: number;
+  boq_estimate_eur_m2: number;
+  boq_total_eur: number;
+  sustainability_note: string;
+  caveats: string[];
+  takeoff: {
+    structural_steel_kg: number;
+    concrete_m3: number;
+    rebar_kg: number;
+    glulam_m3: number;
+    clt_m3: number;
+    timber_studs_m: number;
+  };
+  dcr_distribution: {
+    under_60_pct: number;
+    between_60_80: number;
+    between_80_100: number;
+    over_100: number;
+  };
+  constructibility: {
+    unique_beam_sizes: number;
+    unique_column_sizes: number;
+    total_unique_sizes: number;
+  };
+  column_count: number;
+  gfa_m2: number;
+  notes: string[];
+}
+
 // Workflow documents (stage 4 backend). A document is a project-scoped
 // editable instance of a workflow graph. Runs can be created from a
 // document (snapshotted) or from a template (legacy direct).
