@@ -19,6 +19,7 @@ import {
   type ConnectorClass,
   type ConnectorInstallation,
 } from "@/lib/api";
+import { logoUrlForConnector } from "@/lib/connector-logos";
 
 const CATEGORY_LABEL: Record<ConnectorCategory, string> = {
   cad_bim: "CAD & BIM",
@@ -271,12 +272,7 @@ function ConnectorCard({
   return (
     <article className="flex h-full flex-col gap-3 rounded-md border border-border bg-surface p-4">
       <header className="flex items-start gap-3">
-        <div
-          className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-hover text-xs font-semibold text-foreground"
-          aria-hidden="true"
-        >
-          {initials(cls.name)}
-        </div>
+        <ConnectorLogo classId={cls.id} name={cls.name} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <h3 className="truncate text-sm font-medium text-foreground">{cls.name}</h3>
@@ -383,6 +379,29 @@ function InstallStatus({ install }: { install: ConnectorInstallation | null }) {
       <AlertCircle className="size-3" aria-hidden="true" />
       {install.last_error ?? "Error"}
     </p>
+  );
+}
+
+function ConnectorLogo({ classId, name }: { classId: string; name: string }) {
+  const url = logoUrlForConnector(classId);
+  if (url) {
+    return (
+      <div
+        className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-white p-1.5"
+        aria-hidden="true"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt="" className="block size-full object-contain" loading="lazy" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-hover text-xs font-semibold text-foreground"
+      aria-hidden="true"
+    >
+      {initials(name)}
+    </div>
   );
 }
 
