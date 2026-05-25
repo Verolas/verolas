@@ -23,6 +23,7 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from verolas_storage import PresignedUrlService
 
+from verolas_api.settings import Settings
 from verolas_api.workflow.adapters import get_adapter
 from verolas_api.workflow.adapters.base import AdapterContext
 from verolas_api.workflow.executor import (
@@ -132,6 +133,7 @@ async def create_run(
     template_slug: str,
     started_by_user_id: UUID,
     storage: PresignedUrlService | None = None,
+    settings: Settings | None = None,
 ) -> RunView:
     """Create a new run for `project_id` from the named template.
 
@@ -198,6 +200,7 @@ async def create_run(
         run_id=run_id,
         actor_user_id=started_by_user_id,
         storage=storage,
+        settings=settings,
     )
     return await get_run(conn, run_id=run_id)
 
@@ -210,6 +213,7 @@ async def create_run_from_document(
     document_id: UUID,
     started_by_user_id: UUID,
     storage: PresignedUrlService | None = None,
+    settings: Settings | None = None,
 ) -> RunView:
     """Create a run from a project-scoped workflow document.
 
@@ -293,6 +297,7 @@ async def create_run_from_document(
         run_id=run_id,
         actor_user_id=started_by_user_id,
         storage=storage,
+        settings=settings,
     )
     return await get_run(conn, run_id=run_id)
 
@@ -404,6 +409,7 @@ async def mark_manual_done(
     actor_user_id: UUID,
     outputs: dict[str, Any] | None = None,
     storage: PresignedUrlService | None = None,
+    settings: Settings | None = None,
     project_id: UUID | None = None,
 ) -> RunView:
     """Mark a MANUAL node done, then re-advance the run."""
@@ -424,6 +430,7 @@ async def mark_manual_done(
         run_id=run_id,
         actor_user_id=actor_user_id,
         storage=storage,
+        settings=settings,
     )
     return await get_run(conn, run_id=run_id)
 
@@ -438,6 +445,7 @@ async def submit_gate_decision(
     note: str | None,
     actor_user_id: UUID,
     storage: PresignedUrlService | None = None,
+    settings: Settings | None = None,
     project_id: UUID | None = None,
 ) -> RunView:
     """Process an approve/reject decision on a gate node."""
@@ -469,6 +477,7 @@ async def submit_gate_decision(
             run_id=run_id,
             actor_user_id=actor_user_id,
             storage=storage,
+            settings=settings,
         )
     return await get_run(conn, run_id=run_id)
 
@@ -532,6 +541,7 @@ async def _advance_until_blocked(
     run_id: UUID,
     actor_user_id: UUID,
     storage: PresignedUrlService | None = None,
+    settings: Settings | None = None,
 ) -> None:
     """Drive the run forward until it blocks on human input or completes.
 
@@ -555,6 +565,7 @@ async def _advance_until_blocked(
             project_id=project_id,
             run_id=run_id,
             storage=storage,
+            settings=settings,
         )
         if dispatch_transitions:
             await _apply_transitions(
@@ -590,6 +601,7 @@ async def _dispatch_ready_adapters(
     project_id: UUID,
     run_id: UUID,
     storage: PresignedUrlService | None,
+    settings: Settings | None = None,
 ) -> list[Transition]:
     """Run any registered adapters for READY automated nodes.
 
@@ -667,6 +679,7 @@ async def _dispatch_ready_adapters(
             node_key=node_key,
             params=dict(node_def.params),
             storage=storage,
+            settings=settings,
         )
         try:
             result = await adapter.run(ctx, inputs)

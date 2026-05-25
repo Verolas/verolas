@@ -127,6 +127,11 @@ def _storage(request: Request) -> Any:
     return getattr(request.app.state, "storage_service", None)
 
 
+def _settings(request: Request) -> Any:
+    """Fetch the api Settings from app.state; None when not initialised."""
+    return getattr(request.app.state, "settings", None)
+
+
 # Org-level routes.
 
 
@@ -180,6 +185,7 @@ async def create_workflow_run(
                 template_slug=body.template_slug,
                 started_by_user_id=ctx.user_id,
                 storage=storage,
+                settings=_settings(request),
             )
         assert body.document_id is not None
         return await runs_service.create_run_from_document(
@@ -189,6 +195,7 @@ async def create_workflow_run(
             document_id=body.document_id,
             started_by_user_id=ctx.user_id,
             storage=storage,
+            settings=_settings(request),
         )
     except TemplateNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -404,6 +411,7 @@ async def advance_workflow_node(
             outputs=body.manual.outputs,
             actor_user_id=ctx.user_id,
             storage=storage,
+            settings=_settings(request),
             project_id=pid,
         )
     except RunNotFound as exc:

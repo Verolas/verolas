@@ -24,6 +24,8 @@ from uuid import UUID
 
 from verolas_storage import PresignedUrlService
 
+from verolas_api.settings import Settings
+
 
 @dataclass(frozen=True, slots=True)
 class ArtifactRef:
@@ -46,6 +48,7 @@ class AdapterContext:
     node_key: str
     params: dict[str, Any]
     storage: PresignedUrlService | None  # None in tests; required in prod
+    settings: Settings | None = None  # adapter reads model keys / vendor creds
 
 
 @dataclass(frozen=True, slots=True)
