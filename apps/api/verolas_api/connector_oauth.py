@@ -133,6 +133,7 @@ OAUTH_CONFIGS: dict[str, ConnectorOAuthConfig] = {
             token_url="https://api.dropboxapi.com/oauth2/token",
             client_id_env="DROPBOX_CLIENT_ID",
             client_secret_env="DROPBOX_CLIENT_SECRET",
+            extra_authorize_params={"token_access_type": "offline"},
         ),
         ConnectorOAuthConfig(
             class_id="egnyte",

@@ -16,11 +16,14 @@ from __future__ import annotations
 def bootstrap_vendors() -> None:
     """Import every vendor adapter so its fetcher registrations run."""
     from verolas_api.vendors import autodesk as _autodesk
+    from verolas_api.vendors import box as _box
+    from verolas_api.vendors import dropbox as _dropbox
     from verolas_api.vendors import google as _google
     from verolas_api.vendors import microsoft as _microsoft
+    from verolas_api.vendors import slack as _slack
 
     # Reference the modules so linters keep the imports alive.
-    _ = (_autodesk, _google, _microsoft)
+    _ = (_autodesk, _box, _dropbox, _google, _microsoft, _slack)
 
 
 __all__ = ["bootstrap_vendors"]
