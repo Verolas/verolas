@@ -65,9 +65,7 @@ def _build() -> TemplateSpec:
         EdgeDef(from_key="upload_brief", to_key="review"),
         EdgeDef(from_key="review", to_key="done"),
     ]
-    definition = TemplateDefinition(
-        nodes=nodes, edges=edges, entry_keys=["upload_brief"]
-    )
+    definition = TemplateDefinition(nodes=nodes, edges=edges, entry_keys=["upload_brief"])
     return TemplateSpec(
         slug="hello-workflow",
         name="Hello Workflow",

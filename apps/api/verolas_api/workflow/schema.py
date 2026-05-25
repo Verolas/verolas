@@ -126,9 +126,7 @@ class TemplateDefinition(BaseModel):
         Sorts keys to keep the hash deterministic across Python runs.
         """
         payload = self.model_dump(mode="json")
-        return hashlib.sha256(
-            json.dumps(payload, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 class TemplateSpec(BaseModel):

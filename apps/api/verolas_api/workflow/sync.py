@@ -71,8 +71,7 @@ async def _upsert(conn: AsyncConnection, spec: TemplateSpec) -> _SyncResult:
     definition_hash = spec.definition.hash()
     async with conn.cursor() as cur:
         await cur.execute(
-            "SELECT app.upsert_global_workflow_template("
-            "%s, %s, %s, %s, %s, %s::jsonb, %s)",
+            "SELECT app.upsert_global_workflow_template(%s, %s, %s, %s, %s, %s::jsonb, %s)",
             (
                 spec.slug,
                 spec.name,

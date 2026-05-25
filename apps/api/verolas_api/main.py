@@ -105,9 +105,7 @@ def create_app(
                 # exception and continue.
                 import logging as _logging
 
-                _logging.getLogger(__name__).exception(
-                    "workflow_template_sync.failed"
-                )
+                _logging.getLogger(__name__).exception("workflow_template_sync.failed")
 
         try:
             yield
