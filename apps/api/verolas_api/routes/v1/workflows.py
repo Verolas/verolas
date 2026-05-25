@@ -443,6 +443,184 @@ async def cancel_workflow_run(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
+class OriginSealInfoBody(BaseModel):
+    """Engineer's seal payload captured at the export_seal step."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    engineer_name: str = Field(min_length=1, max_length=200)
+    registration_number: str = Field(min_length=1, max_length=80)
+    jurisdiction: str = Field(min_length=1, max_length=64)
+    date_iso: str = Field(min_length=4, max_length=64)
+    statement: str = Field(default="", max_length=400)
+
+
+class OriginExportResponse(BaseModel):
+    """Outcome of the export pipeline."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dwg_storage_key: str
+    pdf_storage_key: str
+    ifc_storage_key: str
+    dwg_size_bytes: int
+    pdf_size_bytes: int
+    ifc_size_bytes: int
+    warnings: list[str]
+
+
+@project_workflow_router.post(
+    "/runs/{run_id}/origin/export",
+    response_model=OriginExportResponse,
+)
+@sla_tier(2)
+async def export_origin_seal_package(
+    request: Request,
+    project_id: Annotated[str, Path()],
+    run_id: Annotated[UUID, Path()],
+    body: OriginSealInfoBody,
+    deps: DbOrgConn,
+) -> OriginExportResponse:
+    """Render the DXF + PDF/A + IFC seal package from upstream nodes.
+
+    Pulls the reviewed geometry, chosen option, detail layout, and
+    roof framing from this run's node outputs, runs the three
+    renderers, persists the three artifacts under
+    `workflow-runs/{org}/{run}/origin/`, and returns the storage keys.
+    The engineer marks-done separately with the seal info (the
+    `verolas_api.workflow.runs` mark_manual_done path) recording the
+    keys on the export_seal node's outputs.
+    """
+    import asyncio
+
+    from verolas_api.workflow.origin.export import (
+        SealInfo,
+        build_export_package,
+    )
+
+    conn, ctx = deps
+    pid = _project_id(project_id)
+    _ = pid
+    try:
+        run = await runs_service.get_run(conn, run_id=run_id)
+    except RunNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    by_key = {n.node_key: n for n in run.nodes}
+    review = by_key.get("architectural_review")
+    if review is None or "reviewed_geometry" not in (review.outputs or {}):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="architectural_review has not emitted reviewed_geometry yet.",
+        )
+    reviewed_geometry = review.outputs["reviewed_geometry"]
+
+    ai_node = by_key.get("ai_options")
+    options = (ai_node.outputs or {}).get("options") if ai_node else None
+    select_node = by_key.get("select_option")
+    note = (select_node.outputs or {}).get("note") if select_node else None
+    chosen_option = _pick_option_from_note(options, note)
+
+    detail_node = by_key.get("detail_edit")
+    detail_layout = (detail_node.outputs or {}).get("refined_option") if detail_node else None
+    roof_node = by_key.get("roof_framing")
+    roof_framing = (roof_node.outputs or {}).get("roof_framing") if roof_node else None
+
+    storage = _storage(request)
+    if storage is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service not configured.",
+        )
+
+    seal = SealInfo(
+        engineer_name=body.engineer_name,
+        registration_number=body.registration_number,
+        jurisdiction=body.jurisdiction,
+        date_iso=body.date_iso,
+        statement=body.statement,
+    )
+
+    try:
+        package = await asyncio.to_thread(
+            build_export_package,
+            project_id=str(project_id),
+            run_id=str(run_id),
+            reviewed_geometry=reviewed_geometry,
+            chosen_option=chosen_option,
+            detail_layout=detail_layout,
+            roof_framing=roof_framing,
+            seal=seal,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Origin export failed: {exc}",
+        ) from exc
+
+    base = f"workflow-runs/{ctx.organization_id}/{run_id}/origin"
+    dwg_key = f"{base}/sealed.dxf"
+    pdf_key = f"{base}/sealed.pdf"
+    ifc_key = f"{base}/sealed.ifc"
+
+    try:
+        await asyncio.to_thread(
+            storage.put_bytes,
+            key=dwg_key,
+            body=package.dxf_bytes,
+            content_type="application/dxf",
+        )
+        await asyncio.to_thread(
+            storage.put_bytes,
+            key=pdf_key,
+            body=package.pdf_bytes,
+            content_type="application/pdf",
+        )
+        await asyncio.to_thread(
+            storage.put_bytes,
+            key=ifc_key,
+            body=package.ifc_bytes,
+            content_type="application/x-step",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Storing sealed package failed: {exc}",
+        ) from exc
+
+    return OriginExportResponse(
+        dwg_storage_key=dwg_key,
+        pdf_storage_key=pdf_key,
+        ifc_storage_key=ifc_key,
+        dwg_size_bytes=len(package.dxf_bytes),
+        pdf_size_bytes=len(package.pdf_bytes),
+        ifc_size_bytes=len(package.ifc_bytes),
+        warnings=package.warnings,
+    )
+
+
+def _pick_option_from_note(
+    options: list[Any] | None,
+    note: str | None,
+) -> dict[str, Any] | None:
+    """Match the engineer's gate note to an option_id from ai_options."""
+    if not options:
+        return None
+    if note:
+        for opt in options:
+            if isinstance(opt, dict):
+                opt_id = opt.get("option_id")
+                if isinstance(opt_id, str) and opt_id in note:
+                    return dict(opt)
+        for opt in options:
+            if isinstance(opt, dict):
+                variant = opt.get("variant")
+                if isinstance(variant, str) and variant.lower() in note.lower():
+                    return dict(opt)
+    first = options[0]
+    return dict(first) if isinstance(first, dict) else None
+
+
 class WorkflowArtifactUrl(BaseModel):
     """Presigned download URL for a workflow-run artifact."""
 
