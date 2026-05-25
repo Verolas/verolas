@@ -3,6 +3,7 @@
 import {
   BarChart3,
   BookOpen,
+  Cpu,
   FolderKanban,
   Library as LibraryIcon,
   LayoutGrid,
@@ -57,6 +58,12 @@ export function OrgShell({ slug, children }: Props) {
       label: "Integrations",
       href: `/o/${slug}/integrations`,
       icon: <LayoutGrid className="size-4" aria-hidden="true" />,
+    },
+    {
+      key: "bridges",
+      label: "Bridge agents",
+      href: `/o/${slug}/bridges`,
+      icon: <Cpu className="size-4" aria-hidden="true" />,
     },
     {
       key: "usage",
