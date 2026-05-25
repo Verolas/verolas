@@ -17,7 +17,7 @@ USER root
 RUN apt-get update \
   && apt-get -y upgrade \
   && apt-get install -y --no-install-recommends postgresql-17-pgvector \
-  && pip install --upgrade --no-cache-dir 'urllib3>=2.7.0' 'requests>=2.32.6' \
+  && pip install --upgrade --no-cache-dir urllib3 requests \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 

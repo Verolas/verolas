@@ -10,3 +10,13 @@
 # with the patched package yet. We run on amd64 (64-bit) only, so the
 # 32-bit-only attack surface does not apply to our workload.
 CVE-2026-31789 exp:2026-06-25
+
+# CVE-2026-44431, CVE-2026-44432: urllib3 CRITICAL findings on Python 3.9.
+# The fixes ship in urllib3 2.7.0, which requires Python 3.10+. The
+# cloudnative-pg/postgresql:17 base image ships Python 3.9 and uses
+# urllib3 only inside barman (the backup tool) for AWS / Azure / GCS
+# blob storage clients. Our deployment does not configure barman against
+# any external cloud storage so the urllib3 code paths are not reached.
+# Revisit when cloudnative-pg moves to Python 3.10+ or backports the fix.
+CVE-2026-44431 exp:2026-06-25
+CVE-2026-44432 exp:2026-06-25
