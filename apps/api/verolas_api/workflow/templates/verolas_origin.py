@@ -66,15 +66,16 @@ def _build() -> TemplateSpec:
             kind=NodeKind.MANUAL,
             name="Upload architect CAD",
             description=(
-                "Drop the architect drawing as DWG, DXF, or IFC. The "
-                "upload guide previews the five quality checks the "
-                "parser will run (single-plan, segmentation, alignment, "
-                "walls, roof). Re-upload until the checks pass."
+                "Drop the architect drawing as DXF or IFC. The upload "
+                "guide previews the five quality checks the parser will "
+                "run (single-plan, segmentation, alignment, walls, "
+                "roof). Native DWG is not yet supported; export DWG to "
+                "DXF from AutoCAD before uploading."
             ),
             params={
                 "step": "cad",
                 "sla_minutes": 10,
-                "accepted_formats": ["dwg", "dxf", "ifc"],
+                "accepted_formats": ["dxf", "ifc"],
                 "expected_outputs": ["cad_file_key", "cad_format"],
             },
             group_key=_GROUP_KEY,
