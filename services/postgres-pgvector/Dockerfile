@@ -10,9 +10,15 @@ FROM ghcr.io/cloudnative-pg/postgresql:17
 
 USER root
 
+# Upgrade the base packages so OS-level CVEs in the upstream cloudnative-pg
+# image (libgnutls30 etc.) get the latest Debian security patches, then add
+# pgvector. The upstream image lags patches by days; --pull on the build action
+# only refreshes the FROM layer, not the packages inside it.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    postgresql-17-pgvector \
+  && apt-get -y upgrade \
+  && apt-get install -y --no-install-recommends postgresql-17-pgvector \
+  && pip install --upgrade --no-cache-dir urllib3 \
+  && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
 USER 26
