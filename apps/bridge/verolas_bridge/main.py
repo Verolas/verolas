@@ -11,6 +11,7 @@ import structlog
 from verolas_bridge.client import BridgeClient
 from verolas_bridge.runner import run_forever
 from verolas_bridge.settings import BridgeSettings
+from verolas_bridge.tools import bootstrap_tools
 
 
 def _configure_logging(level: str, json: bool) -> None:
@@ -34,6 +35,7 @@ def _configure_logging(level: str, json: bool) -> None:
 async def _amain() -> None:
     settings = BridgeSettings()  # type: ignore[call-arg]
     _configure_logging(settings.log_level, settings.log_json)
+    bootstrap_tools()
     log = structlog.get_logger("verolas_bridge")
     log.info(
         "bridge_starting",
