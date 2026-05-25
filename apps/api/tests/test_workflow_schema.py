@@ -230,3 +230,41 @@ def test_hello_template_loads_and_validates() -> None:
     }
     assert hello.definition.entry_keys == ["upload_brief"]
     _ = registry_module
+
+
+def test_de_statik_template_loads_and_validates() -> None:
+    """The DE Statik Genehmigungsplanung template should register without errors."""
+    import importlib
+    import sys
+
+    sys.modules.pop("verolas_api.workflow.templates.de_statik_genehmigungsplanung", None)
+    importlib.import_module("verolas_api.workflow.templates.de_statik_genehmigungsplanung")
+
+    spec = next(t for t in registered_templates() if t.slug == "de-statik-genehmigungsplanung")
+
+    # 14 nodes, 15 edges (12 linear + 3 fan-out + the fan-in shares those 3).
+    # Actually: 1 kickoff + 1 lastannahmen + 1 tragsystem + 1 schnittgroessen
+    # + 3 bemessung + 1 durchbildung + 1 statik + 1 review + 1 prueftstatik
+    # + 1 bauvorlagen + 1 qes + 1 submission = 14 nodes
+    # Edges: 3 (start chain) + 3 (fan-out) + 3 (fan-in) + 6 (linear tail) = 15
+    assert len(spec.definition.nodes) == 14
+    assert len(spec.definition.edges) == 15
+    assert spec.definition.entry_keys == ["kickoff"]
+    assert spec.jurisdiction == "DE"
+    assert spec.project_type == "residential"
+
+    # Sanity: the three Bemessung tracks all feed into Konstruktive Durchbildung.
+    inbound_to_durchbildung = [
+        e for e in spec.definition.edges if e.to_key == "konstruktive_durchbildung"
+    ]
+    assert len(inbound_to_durchbildung) == 3
+    assert {e.from_key for e in inbound_to_durchbildung} == {
+        "bemessung_decken",
+        "bemessung_stuetzen",
+        "bemessung_fundamente",
+    }
+
+    # Sanity: the submission node is the only terminal node.
+    outbound = {e.from_key for e in spec.definition.edges}
+    terminal_keys = {n.key for n in spec.definition.nodes if n.key not in outbound}
+    assert terminal_keys == {"bauamt_submission"}

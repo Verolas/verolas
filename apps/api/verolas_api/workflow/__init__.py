@@ -29,9 +29,14 @@ from __future__ import annotations
 
 def bootstrap_workflow_templates() -> None:
     """Import every template module so its registration runs."""
-    from verolas_api.workflow.templates import hello as _hello
+    from verolas_api.workflow.templates import (
+        de_statik_genehmigungsplanung as _de_statik,
+    )
+    from verolas_api.workflow.templates import (
+        hello as _hello,
+    )
 
-    _ = (_hello,)
+    _ = (_de_statik, _hello)
 
 
 __all__ = ["bootstrap_workflow_templates"]
