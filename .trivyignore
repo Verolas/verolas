@@ -1,0 +1,12 @@
+# Trivy CVE allowlist.
+#
+# Entries here suppress findings until the listed date. After that, Trivy
+# fails again until the line is removed or the date extended. Add a one-line
+# justification above each entry. Re-check unfixed CVEs at most monthly.
+
+# CVE-2026-31789: OpenSSL heap buffer overflow on 32-bit systems via large
+# X.509 certificates. Fix exists in libssl3 3.0.19-1~deb12u2 but the
+# gcr.io/distroless/nodejs22-debian12 runtime image has not been rebuilt
+# with the patched package yet. We run on amd64 (64-bit) only, so the
+# 32-bit-only attack surface does not apply to our workload.
+CVE-2026-31789 exp:2026-06-25

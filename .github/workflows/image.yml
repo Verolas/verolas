@@ -121,6 +121,7 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
           vuln-type: os,library
+          trivyignores: .trivyignore
 
       - name: Upload Trivy SARIF
         if: github.event_name != 'pull_request' && always() && hashFiles(format('trivy-{0}.sarif', matrix.name)) != ''
@@ -139,6 +140,7 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL
           vuln-type: os,library
+          trivyignores: .trivyignore
           skip-setup-trivy: true
 
       - name: Install Cosign
