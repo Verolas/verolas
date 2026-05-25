@@ -327,6 +327,26 @@ def render_pdf(
         story.append(_takeoff_table(chosen_option))
         story.append(Spacer(1, 3 * mm))
         story.append(_dcr_table(chosen_option))
+
+        worst = chosen_option.get("worst_case_member")
+        if isinstance(worst, dict):
+            story.append(Spacer(1, 3 * mm))
+            story.append(
+                Paragraph(
+                    f"<b>Worst-case member:</b> "
+                    f"<font face='Courier'>{worst.get('member_id', '')}</font> "
+                    f"({worst.get('section', '')}) governs at DCR "
+                    f"{float(worst.get('dcr', 0)):.2f} ({worst.get('governs', '')}).",
+                    body,
+                )
+            )
+
+        schedule = chosen_option.get("member_schedule") or []
+        if isinstance(schedule, list) and schedule:
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph("Member schedule", h2))
+            story.append(_member_schedule_table(schedule))
+
         story.append(Spacer(1, 3 * mm))
         story.append(Paragraph("Caveats", h2))
         for caveat in chosen_option.get("caveats") or []:
@@ -440,6 +460,46 @@ def _takeoff_table(option: dict[str, Any]) -> Table:
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ]
+        )
+    )
+    return table
+
+
+def _member_schedule_table(schedule: list[dict[str, Any]]) -> Table:
+    """Render the member schedule as a multi-row table.
+
+    Real BoQ has hundreds of rows; this shows the first 30 and a
+    'further rows' footer so the PDF stays scannable. The full
+    schedule is in the run's outputs for downstream consumers.
+    """
+    rows: list[list[Any]] = [["Section", "Role", "Count", "Length m", "Weight kg", "Cost EUR"]]
+    visible = schedule[:30]
+    for row in visible:
+        rows.append(
+            [
+                str(row.get("section", "")),
+                str(row.get("role", "")),
+                f"{int(row.get('count', 0))}",
+                f"{float(row.get('total_length_m', 0)):.1f}",
+                f"{int(row.get('total_weight_kg', 0)):,}",
+                f"{int(row.get('total_cost_eur', 0)):,}",
+            ]
+        )
+    if len(schedule) > 30:
+        rows.append([f"+ {len(schedule) - 30} more rows in JSON outputs", "", "", "", "", ""])
+    table = Table(
+        rows,
+        colWidths=[55 * mm, 18 * mm, 18 * mm, 25 * mm, 25 * mm, 25 * mm],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
             ]
         )
     )

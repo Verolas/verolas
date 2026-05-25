@@ -784,6 +784,21 @@ export interface OriginStructuralOption {
     between_80_100: number;
     over_100: number;
   };
+  worst_case_member: {
+    member_id: string;
+    role: string;
+    section: string;
+    dcr: number;
+    governs: string;
+  } | null;
+  member_schedule: Array<{
+    section: string;
+    role: string;
+    count: number;
+    total_length_m: number;
+    total_weight_kg: number;
+    total_cost_eur: number;
+  }>;
   constructibility: {
     unique_beam_sizes: number;
     unique_column_sizes: number;

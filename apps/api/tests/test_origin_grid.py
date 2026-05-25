@@ -188,3 +188,67 @@ def test_output_serializes_to_json_safely() -> None:
         payload = option.model_dump(mode="json")
         # Round-trip through Pydantic to make sure types stay clean.
         assert StructuralOption.model_validate(payload) == option
+
+
+def test_options_emit_member_schedule_and_worst_case() -> None:
+    """New richness from P0: each option carries a real schedule + worst-case."""
+    geometry = _geometry(
+        [
+            _floor("Floor 1", max_x=24.0, max_y=18.0),
+            _floor("Floor 2", max_x=24.0, max_y=18.0),
+            _floor("Floor 3", max_x=24.0, max_y=18.0),
+            _floor("Roof", max_x=24.0, max_y=18.0, is_roof=True),
+        ]
+    )
+    options = generate_options(geometry, {"asset_type": "residential", "jurisdiction": "DE"})
+    assert len(options) == 3
+    for option in options:
+        # schedule rows aggregate by (section, role).
+        assert option.member_schedule, f"{option.option_id} missing schedule"
+        assert all(row.count >= 1 for row in option.member_schedule)
+        assert all(row.total_length_m > 0 for row in option.member_schedule)
+        assert all(row.total_cost_eur > 0 for row in option.member_schedule)
+
+        # Worst case is the highest-DCR member.
+        assert option.worst_case_member is not None
+        assert option.worst_case_member.dcr > 0
+        assert option.worst_case_member.section in {row.section for row in option.member_schedule}
+        assert option.worst_case_member.governs in ("bending", "axial")
+
+        # Constructibility now reflects the actual schedule.
+        assert option.constructibility.total_unique_sizes >= 2
+        assert option.boq_total_eur > 0
+
+
+def test_three_variants_are_actually_distinct() -> None:
+    """Even with collapsible footprint, options must differ on BoQ or grid."""
+    geometry = _geometry(
+        [
+            _floor("Floor 1", max_x=20.0, max_y=15.0),
+            _floor("Floor 2", max_x=20.0, max_y=15.0),
+            _floor("Roof", max_x=20.0, max_y=15.0, is_roof=True),
+        ]
+    )
+    options = generate_options(geometry)
+    boqs = {o.boq_total_eur for o in options}
+    structures = {o.primary_structure for o in options}
+    # Each option has a distinct primary_structure (3 different systems).
+    assert len(structures) == 3
+    # And BoQ totals differ pairwise (sizing strategies guarantee this
+    # even when bay grids collapse).
+    assert len(boqs) == 3
+
+
+def test_caveats_are_context_specific() -> None:
+    """Residential steel must NOT carry an office-vibration caveat;
+    must carry residential acoustic + vibration caveat."""
+    geometry = _geometry(
+        [
+            _floor("Floor 1", max_x=30.0, max_y=20.0),
+            _floor("Roof", max_x=30.0, max_y=20.0, is_roof=True),
+        ]
+    )
+    options = generate_options(geometry, {"asset_type": "residential"})
+    balanced = next(o for o in options if o.variant == "balanced")
+    assert any("acoustic" in c.lower() for c in balanced.caveats)
+    assert all("office" not in c.lower() for c in balanced.caveats)
