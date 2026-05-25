@@ -35,8 +35,11 @@ def bootstrap_workflow_templates() -> None:
     from verolas_api.workflow.templates import (
         hello as _hello,
     )
+    from verolas_api.workflow.templates import (
+        verolas_origin as _verolas_origin,
+    )
 
-    _ = (_de_statik, _hello)
+    _ = (_de_statik, _hello, _verolas_origin)
 
 
 __all__ = ["bootstrap_workflow_templates"]

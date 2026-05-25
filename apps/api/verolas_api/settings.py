@@ -59,3 +59,17 @@ class Settings(BaseSettings):
         default_factory=list,
         description="Origins allowed to call the API from the browser, e.g. https://app.dev.verolas.com.",
     )
+
+    anthropic_api_key: str | None = Field(
+        default=None,
+        description=(
+            "API key for the Anthropic Claude API, used by the "
+            "verolas.origin.generator adapter. When unset, the adapter "
+            "returns a stubbed concept-options payload instead of calling "
+            "the real model."
+        ),
+    )
+    anthropic_model: str = Field(
+        default="claude-sonnet-4-6",
+        description="Claude model used by Verolas Origin. Override for cost / quality tuning.",
+    )
