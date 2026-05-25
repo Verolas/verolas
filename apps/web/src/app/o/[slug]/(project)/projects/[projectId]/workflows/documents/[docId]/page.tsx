@@ -929,6 +929,9 @@ function DocumentEditor({ params }: Props) {
             activeRunId={activeRun?.id ?? null}
             onSelectRun={(run) => setActiveRun(run)}
             onRefresh={refreshActiveRun}
+            flowNodes={flowNodes}
+            collapsedGroups={collapsedGroups}
+            onToggleGroup={toggleGroup}
           />
         </aside>
       </div>
@@ -961,15 +964,68 @@ function Sidebar({
   activeRunId,
   onSelectRun,
   onRefresh,
+  flowNodes,
+  collapsedGroups,
+  onToggleGroup,
 }: {
   doc: WorkflowDocument;
   recentRuns: WorkflowRun[];
   activeRunId: string | null;
   onSelectRun: (run: WorkflowRun) => void;
   onRefresh: () => void;
+  flowNodes: FlowNode[];
+  collapsedGroups: Set<string>;
+  onToggleGroup: (groupKey: string) => void;
 }) {
+  // Per-group rollup for the Groups section. Built from the same source
+  // flowNodes the canvas reads, so collapse/expand here mirrors the
+  // canvas state exactly.
+  const groupRollups = (doc.definition.groups ?? []).map((g) => {
+    const members = flowNodes.filter((n) => n.data.groupKey === g.key);
+    return {
+      key: g.key,
+      name: g.name,
+      description: g.description ?? null,
+      memberCount: members.length,
+      aggregateStatus: aggregateGroupStatus(members.map((m) => m.data.status)),
+      collapsed: collapsedGroups.has(g.key),
+    };
+  });
+
   return (
     <div className="space-y-5 p-4">
+      {groupRollups.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Groups
+          </h3>
+          <ul className="space-y-1">
+            {groupRollups.map((g) => {
+              const status = g.aggregateStatus ?? "pending";
+              return (
+                <li key={g.key}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleGroup(g.key)}
+                    className={`w-full rounded border px-2 py-1.5 text-left text-xs ${STATUS_TONE[status]}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{g.name}</span>
+                      <span className="text-[10px] opacity-70">
+                        {g.collapsed ? "expand" : "collapse"}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[10px] opacity-70">
+                      {g.memberCount} steps · {status}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       <section>
         <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Components

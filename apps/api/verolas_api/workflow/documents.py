@@ -27,6 +27,7 @@ from uuid import UUID
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
+from verolas_api.workflow.registry import validate_definition
 from verolas_api.workflow.runs import (
     TemplateNotFound,
     WorkflowError,
@@ -187,6 +188,15 @@ async def update_document(
         updates.append("description = %s")
         params.append(description)
     if definition is not None:
+        # Pydantic enforces shape; this enforces semantics (no cycles,
+        # entry_keys match, edges and group_keys resolve). Without this
+        # a user could PATCH a graph that breaks the executor at run
+        # time, e.g. cycle -> never terminates, dangling group_key ->
+        # canvas cannot render.
+        try:
+            validate_definition(definition, context=f"document {document_id}")
+        except ValueError as exc:
+            raise WorkflowError(str(exc)) from exc
         updates.append("definition = %s::jsonb")
         params.append(json.dumps(definition.model_dump(mode="json")))
 

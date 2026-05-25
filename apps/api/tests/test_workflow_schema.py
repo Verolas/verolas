@@ -11,6 +11,7 @@ from verolas_api.workflow.registry import (
     clear_registry_for_tests,
     register_template,
     registered_templates,
+    validate_definition,
 )
 from verolas_api.workflow.schema import (
     EdgeDef,
@@ -299,6 +300,40 @@ def test_duplicate_group_keys_rejected() -> None:
     )
     with pytest.raises(ValueError, match="duplicate group keys"):
         register_template(spec)
+
+
+def test_validate_definition_accepts_valid_graph() -> None:
+    """validate_definition mirrors the registry checks for ad-hoc graphs."""
+    validate_definition(_simple_definition(), context="doc test")
+
+
+def test_validate_definition_rejects_cycle() -> None:
+    """validate_definition catches cycles in document PATCHes."""
+    definition = TemplateDefinition(
+        nodes=[
+            NodeDef(key="a", kind=NodeKind.MANUAL, name="A"),
+            NodeDef(key="b", kind=NodeKind.AUTOMATED, name="B"),
+        ],
+        edges=[
+            EdgeDef(from_key="a", to_key="b"),
+            EdgeDef(from_key="b", to_key="a"),
+        ],
+        entry_keys=[],
+    )
+    with pytest.raises(ValueError, match="cycle"):
+        validate_definition(definition, context="doc test")
+
+
+def test_validate_definition_rejects_dangling_group_key() -> None:
+    """validate_definition catches dangling group_key on document PATCHes."""
+    definition = TemplateDefinition(
+        nodes=[NodeDef(key="a", kind=NodeKind.MANUAL, name="A", group_key="missing")],
+        edges=[],
+        entry_keys=["a"],
+        groups=[],
+    )
+    with pytest.raises(ValueError, match="unknown group_key 'missing'"):
+        validate_definition(definition, context="doc test")
 
 
 def test_hello_template_loads_and_validates() -> None:
