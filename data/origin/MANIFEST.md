@@ -1,4 +1,4 @@
-# Verolas Origin — Open Data Manifest
+# Verolas Origin - Open Data Manifest
 
 Every data source the Origin engine consumes, with citation,
 license, attribution, acquisition recipe, and the engine module
@@ -21,23 +21,23 @@ the table of contents for those sources.
 
 When two sources cover the same datum, priority is:
 
-1. **Code or specification** (AISC 360-22, Eurocode JRC) — the
+1. **Code or specification** (AISC 360-22, Eurocode JRC) - the
    legal document
-2. **Manufacturer catalogue** (ArcelorMittal, AISC Shapes) — for
+2. **Manufacturer catalogue** (ArcelorMittal, AISC Shapes) - for
    geometric properties
-3. **Industry-standard cost database** (DDC CWICR, Destatis) —
+3. **Industry-standard cost database** (DDC CWICR, Destatis) -
    for unit rates
 4. **Computed values** via published Python packages
-   (structuralcodes, eurocodepy) — for code-compliant equations
+   (structuralcodes, eurocodepy) - for code-compliant equations
 
 ## Sources at a glance
 
 | ID | Source | Region | License | Format | Role |
-|---|---|---|---|---|---|
+|-|-|-|-|-|-|
 | aisc.shapes_v15 | AISC Shapes v15.0 (via ambaker1/aisc-csv MIT mirror) | US | MIT wrapper, AISC public-release data | XLSX + 2 CSVs | US section geometry |
 | aisc.spec_360_22 | ANSI/AISC 360-22 Specification (manual click-through) | US | AISC public release | PDF | US steel design equations |
-| jrc.steel_examples | JRC Design of Steel Buildings — Worked Examples (JRC96658) | EU | EC public-domain reuse | PDF | EU steel worked examples |
-| jrc.concrete_examples | JRC Design of Concrete Buildings — Worked Examples (JRC89037) | EU | EC public-domain reuse | PDF | EU concrete worked examples |
+| jrc.steel_examples | JRC Design of Steel Buildings - Worked Examples (JRC96658) | EU | EC public-domain reuse | PDF | EU steel worked examples |
+| jrc.concrete_examples | JRC Design of Concrete Buildings - Worked Examples (JRC89037) | EU | EC public-domain reuse | PDF | EU concrete worked examples |
 | jrc.bridge_examples | JRC Bridge Design Worked Examples (EUR 25193) | EU | EC public-domain reuse | PDF | EU bridge / composite worked examples |
 | jrc.seismic_examples | JRC EC8 Seismic Design Worked Examples (EUR 25204) | EU | EC public-domain reuse | PDF | EU seismic worked examples |
 | eu-steel.eurocodepy | pcachim/eurocodepy data JSONs (I, CHS, RHS, SHS profiles) | EU | MIT | JSON | EU section geometry + EC3 pre-computed design resistance |
@@ -99,7 +99,7 @@ strings on the References page when the relevant data is used:
 
 ### `aisc.spec_360_22`
 
-- **Name**: ANSI/AISC 360-22 — Specification for Structural Steel Buildings
+- **Name**: ANSI/AISC 360-22 - Specification for Structural Steel Buildings
 - **Publisher**: American Institute of Steel Construction
 - **Date**: 2022
 - **URL**: https://www.aisc.org/Specification-for-Structural-Steel-Buildings-ANSIAISC-360-22-Download
@@ -115,7 +115,7 @@ strings on the References page when the relevant data is used:
 
 ### `jrc.steel_examples`
 
-- **Name**: Eurocodes: Background & Applications — Design of Steel Buildings — Worked Examples
+- **Name**: Eurocodes: Background & Applications - Design of Steel Buildings - Worked Examples
 - **JRC Report Number**: JRC96658
 - **Publisher**: European Commission Joint Research Centre
 - **Date**: 2015 (still authoritative for EC interpretation)
@@ -130,7 +130,7 @@ strings on the References page when the relevant data is used:
 
 ### `jrc.concrete_examples`
 
-- **Name**: Eurocodes: Background & Applications — Design of Concrete Buildings — Worked Examples (and related EC2 reports)
+- **Name**: Eurocodes: Background & Applications - Design of Concrete Buildings - Worked Examples (and related EC2 reports)
 - **JRC Report Number**: JRC110624 / similar
 - **Publisher**: EC JRC
 - **Date**: various, 2014-2025
@@ -144,7 +144,7 @@ strings on the References page when the relevant data is used:
 
 ### `arcelormittal.sections`
 
-- **Name**: European Sections — Sales Program Brochure / Properties
+- **Name**: European Sections - Sales Program Brochure / Properties
 - **Publisher**: ArcelorMittal Commercial Sections
 - **Date**: current edition (annually refreshed)
 - **URL**: https://sections.arcelormittal.com/ (registration may
@@ -163,7 +163,7 @@ strings on the References page when the relevant data is used:
 ### `pip.structuralcodes`
 
 - **Name**: structuralcodes
-- **Publisher**: fib — International Federation for Structural Concrete
+- **Publisher**: fib - International Federation for Structural Concrete
 - **PyPI**: https://pypi.org/project/structuralcodes/
 - **GitHub**: https://github.com/fib-international/structuralcodes
 - **Version pin**: latest stable; specify in pyproject.toml
@@ -221,7 +221,7 @@ strings on the References page when the relevant data is used:
   but most series are publicly downloadable as CSV)
 - **DBnomics mirror**: https://db.nomics.world/DESTATIS/61261BJ008
 - **Format**: CSV / JSON API
-- **License**: Datenlizenz Deutschland — Namensnennung 2.0 (open
+- **License**: Datenlizenz Deutschland - Namensnennung 2.0 (open
   data licence; commercial use OK with attribution)
 - **Consumed by**: `origin/cost.py` time-adjustment helper.
   DDC CWICR base costs are pegged to a base year; we apply the
@@ -259,17 +259,17 @@ strings on the References page when the relevant data is used:
 
 ## What we DO NOT have (still paid)
 
-- **DIN EN ... /NA (German National Annex parameters)** — each
+- **DIN EN ... /NA (German National Annex parameters)** - each
   document ~€100-220 from https://www.dinmedia.de. Required if a
   particular NA factor materially differs from the default EC
   value. Defer until first real German Bauamt submission.
-- **AISC Steel Construction Manual 16th Edition** — ~$415 with
+- **AISC Steel Construction Manual 16th Edition** - ~$415 with
   design-aid tables. Not required because the spec + shapes are
   free; nice-to-have for connection design tables (Part 9).
-- **BKI Baukosten Gebäude/Positionen** — replaced by DDC CWICR
+- **BKI Baukosten Gebäude/Positionen** - replaced by DDC CWICR
   for v1. Re-evaluate if engineers tell us DDC numbers don't
   match their experience.
-- **RSMeans** — replaced by DDC CWICR + NYC OpenData for v1.
+- **RSMeans** - replaced by DDC CWICR + NYC OpenData for v1.
 
 ## Re-fetching the cache
 

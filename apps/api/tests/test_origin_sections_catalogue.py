@@ -39,7 +39,7 @@ def test_us_steel_catalogue_has_full_w_shape_coverage() -> None:
     columns = sections_for("steel_mrf", "column", jurisdiction="us")
     assert len(beams) >= 200, f"expected >=200 US W-shape beams, got {len(beams)}"
     assert len(beams) == len(columns)
-    # Every entry starts with "W" — only W-shapes load from the v15 SI sheet.
+    # Every entry starts with "W" - only W-shapes load from the v15 SI sheet.
     assert all(s.name.startswith("W") for s in beams)
 
 

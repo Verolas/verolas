@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verolas Origin — data acquisition script.
+# Verolas Origin - data acquisition script.
 #
 # Idempotent. Re-running is safe; existing files are skipped unless
 # you pass --force.
@@ -90,7 +90,7 @@ if ! should_skip jrc; then
 fi
 
 # ---------------------------------------------------------------
-# AISC Shapes v15.0 — fetched from the ambaker1/aisc-csv mirror
+# AISC Shapes v15.0 - fetched from the ambaker1/aisc-csv mirror
 # (MIT-licensed wrapper around the AISC XLSX; the underlying AISC
 # disclaimer applies to engineering use).
 # ---------------------------------------------------------------

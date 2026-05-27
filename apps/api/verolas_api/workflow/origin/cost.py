@@ -69,15 +69,13 @@ _PICKS_EU: Final[dict[MaterialClass, str]] = {
 }
 
 _PICKS_US: Final[dict[MaterialClass, str]] = {
-    "structural_steel": (
-        "Auxiliary metal structures predominantly made of thick-gauge steel"
-    ),
+    "structural_steel": ("Auxiliary metal structures predominantly made of thick-gauge steel"),
     "reinforcing_steel": "Hot-rolled smooth reinforcing steel, class A-I",
     "glulam_softwood": "Edged softwood timber",
 }
 
 # Unit-to-mass conversions. The DDC catalog reports steel as `t` for
-# DE and `ton` for US — both are metric tonnes in this dataset (see
+# DE and `ton` for US - both are metric tonnes in this dataset (see
 # the DDC dictionary `DATA_DICTIONARY.md`). Volumetric units use the
 # US-customary CY (cubic yard) for the US catalogue.
 _KG_PER_UNIT: Final[dict[str, float]] = {
@@ -107,14 +105,10 @@ def _find_row(
 ) -> dict[str, str]:
     """Return the highest-usage Material row whose name contains `name_substring`."""
     matches = [
-        r
-        for r in rows
-        if r.get("type") == "Material" and name_substring in (r.get("name") or "")
+        r for r in rows if r.get("type") == "Material" and name_substring in (r.get("name") or "")
     ]
     if not matches:
-        raise LookupError(
-            f"DDC catalog has no Material row matching {name_substring!r}"
-        )
+        raise LookupError(f"DDC catalog has no Material row matching {name_substring!r}")
 
     def _usage(row: dict[str, str]) -> int:
         value = row.get("usage_count") or "0"
@@ -159,7 +153,7 @@ def material_rate(
 ) -> CostQuote:
     """Return the DDC CWICR rate for `material_class` in `jurisdiction`.
 
-    Cached per (material_class, jurisdiction) — DDC files don't change
+    Cached per (material_class, jurisdiction) - DDC files don't change
     at runtime, and parsing the CSV on every call is wasteful.
     """
     return _quote_cache[(material_class, jurisdiction)]

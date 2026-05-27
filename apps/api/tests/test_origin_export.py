@@ -313,7 +313,7 @@ def test_render_pdf_metadata_carries_origin_title_and_engineer() -> None:
     blob = pdf_bytes.decode("latin-1", errors="replace")
     # Title lives in the unfiltered PDF /Title slot; the engineer name
     # lives in /Author. The references section text itself sits inside
-    # a compressed content stream, so we don't grep for it here — the
+    # a compressed content stream, so we don't grep for it here - the
     # unit tests above cover the picker that determines what goes in.
     assert "Origin" in blob
     assert "Mustermann" in blob

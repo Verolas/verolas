@@ -437,9 +437,9 @@ def sections_for(
     candidates = [
         s
         for s in _ALL_SECTIONS
-        if s.system_id == system_id and s.role == role and (
-            system_id != "steel_mrf" or s.jurisdiction == jurisdiction
-        )
+        if s.system_id == system_id
+        and s.role == role
+        and (system_id != "steel_mrf" or s.jurisdiction == jurisdiction)
     ]
     return sorted(candidates, key=lambda s: s.rank)
 
@@ -508,8 +508,7 @@ EC3_DESIGN_CODE_ATTRIBUTION: Final[str] = (
 )
 
 AISC_360_DESIGN_CODE_ATTRIBUTION: Final[str] = (
-    "US steel member capacities computed per ANSI/AISC 360-22 "
-    "(Sections F2 and E3 as applicable)."
+    "US steel member capacities computed per ANSI/AISC 360-22 (Sections F2 and E3 as applicable)."
 )
 
 
