@@ -21,6 +21,9 @@ dependencies = [
   "anthropic>=0.40.0",
   "ezdxf>=1.3.0",
   "ifcopenshell>=0.8.0",
+  "pandas>=2.2.0",
+  "pyarrow>=18.0.0",
+  "structuralcodes>=0.7.0",
 ]
 
 [dependency-groups]

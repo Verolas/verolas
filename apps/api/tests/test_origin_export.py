@@ -238,6 +238,87 @@ def test_render_ifc_emits_ifc_header_and_storeys() -> None:
     assert "IFCCOLUMN" in text
 
 
+def test_attributions_always_include_ddc_cwicr_cost_basis() -> None:
+    from verolas_api.workflow.origin.export import _attributions_for
+
+    attrs = _attributions_for(None)
+    assert any("DDC CWICR" in a for a in attrs)
+    assert any("CC-BY-4.0" in a for a in attrs)
+
+
+def test_attributions_skip_steel_when_chosen_option_is_concrete() -> None:
+    from verolas_api.workflow.origin.export import _attributions_for
+
+    chosen = {
+        "primary_structure": "RC frame with shear walls",
+        "member_schedule": [
+            {"section": "RC band 1600x260 (C25/30)"},
+            {"section": "RC 400x400 (C25/30)"},
+        ],
+    }
+    attrs = _attributions_for(chosen)
+    blob = " ".join(attrs)
+    assert "DDC CWICR" in blob
+    assert "eurocodepy" not in blob
+    assert "Eurocode 3" not in blob
+    assert "AISC" not in blob
+
+
+def test_attributions_include_eu_sources_when_chosen_option_is_steel_mrf() -> None:
+    from verolas_api.workflow.origin.export import _attributions_for
+
+    chosen = {
+        "primary_structure": "Steel MRF with secondary beams",
+        "member_schedule": [
+            {"section": "HEA220 (S355)"},
+            {"section": "HEB240 (S355)"},
+        ],
+    }
+    attrs = _attributions_for(chosen)
+    blob = " ".join(attrs)
+    assert "DDC CWICR" in blob
+    assert "eurocodepy" in blob
+    assert "Eurocode 3" in blob
+    assert "AISC" not in blob
+
+
+def test_attributions_include_aisc_when_us_w_shapes_in_schedule() -> None:
+    from verolas_api.workflow.origin.export import _attributions_for
+
+    chosen = {
+        "primary_structure": "Steel MRF with secondary beams",
+        "member_schedule": [{"section": "W360X51 (A992)"}],
+    }
+    attrs = _attributions_for(chosen)
+    blob = " ".join(attrs)
+    assert "AISC Shapes Database v15.0" in blob
+    assert "ANSI/AISC 360-22" in blob
+
+
+def test_render_pdf_metadata_carries_origin_title_and_engineer() -> None:
+    """Author + title in the PDF dictionary stay searchable post-compression."""
+    pdf_bytes = render_pdf(
+        project_id="proj",
+        run_id="run",
+        chosen_option={
+            "option_id": "balanced_steel_mrf",
+            "primary_structure": "Steel MRF with secondary beams",
+            "member_schedule": [{"section": "HEA220 (S355)"}],
+        },
+        geometry=_sample_geometry(),
+        detail_layout=None,
+        roof_framing=None,
+        seal=_sample_seal(),
+    )
+    blob = pdf_bytes.decode("latin-1", errors="replace")
+    # Title lives in the unfiltered PDF /Title slot; the engineer name
+    # lives in /Author. The references section text itself sits inside
+    # a compressed content stream, so we don't grep for it here — the
+    # unit tests above cover the picker that determines what goes in.
+    assert "Origin" in blob
+    assert "Mustermann" in blob
+
+
 def test_build_export_package_records_warnings_for_missing_inputs() -> None:
     geometry = _sample_geometry()
     result = build_export_package(

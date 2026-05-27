@@ -66,3 +66,20 @@ test-results/
 # Local-only state
 .local/
 tmp/
+
+# Origin data cache: large external datasets. Manifests and scripts
+# are tracked; the actual downloaded files are not.
+data/origin/**
+!data/origin/MANIFEST.md
+!data/origin/USAGE_PLAN.md
+!data/origin/sources.yaml
+!data/origin/scripts/
+!data/origin/scripts/**
+!data/origin/asce7/README.md
+
+# Private reference PDFs the user keeps locally for cross-checking
+# engine output. Scoped to repo root so vendored AISC catalogues
+# inside apps/api/verolas_api/data/origin/aisc/ stay tracked.
+/aisc/
+/bki/
+

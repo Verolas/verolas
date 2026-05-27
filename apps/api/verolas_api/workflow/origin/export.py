@@ -63,7 +63,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from verolas_api.workflow.origin.cost import CWICR_ATTRIBUTION
 from verolas_api.workflow.origin.geometry import Geometry
+from verolas_api.workflow.origin.sections import (
+    AISC_360_DESIGN_CODE_ATTRIBUTION,
+    AISC_SHAPES_ATTRIBUTION,
+    EC3_DESIGN_CODE_ATTRIBUTION,
+    EUROCODEPY_ATTRIBUTION,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -411,6 +418,20 @@ def render_pdf(
                 )
             )
 
+    story.append(PageBreak())
+    story.append(Paragraph("5. Data sources and attributions", h2))
+    story.append(
+        Paragraph(
+            "Every figure on the preceding pages traces back to one of "
+            "the published sources below. Engineer review supersedes "
+            "any engine output.",
+            body,
+        )
+    )
+    for attribution in _attributions_for(chosen_option):
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(f"- {attribution}", small))
+
     story.append(Spacer(1, 12 * mm))
     story.append(
         Paragraph(
@@ -422,6 +443,37 @@ def render_pdf(
 
     doc.build(story)
     return buf.getvalue()
+
+
+def _attributions_for(chosen_option: dict[str, Any] | None) -> list[str]:
+    """Pick attribution strings whose data the chosen option actually used.
+
+    Cost basis (DDC CWICR) is always present because the BoQ runs for
+    every option. Steel-specific attributions appear only when the
+    chosen option uses a steel system. EC3 vs AISC 360 follows the
+    jurisdiction; today the engine is EU-only so AISC 360 is included
+    only when US sections show up in the schedule.
+    """
+    attributions: list[str] = [CWICR_ATTRIBUTION]
+
+    primary_structure = ""
+    schedule_sections = ""
+    if chosen_option:
+        primary_structure = str(chosen_option.get("primary_structure") or "").lower()
+        schedule = chosen_option.get("member_schedule") or []
+        if isinstance(schedule, list):
+            schedule_sections = " ".join(
+                str(row.get("section") or "") for row in schedule if isinstance(row, dict)
+            )
+
+    if "steel" in primary_structure or "(s355)" in schedule_sections.lower():
+        attributions.append(EUROCODEPY_ATTRIBUTION)
+        attributions.append(EC3_DESIGN_CODE_ATTRIBUTION)
+    if "(a992)" in schedule_sections.lower():
+        attributions.append(AISC_SHAPES_ATTRIBUTION)
+        attributions.append(AISC_360_DESIGN_CODE_ATTRIBUTION)
+
+    return attributions
 
 
 def _option_summary_paragraph(option: dict[str, Any]) -> str:
