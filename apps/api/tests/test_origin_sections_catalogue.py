@@ -45,7 +45,7 @@ def test_us_steel_catalogue_has_full_w_shape_coverage() -> None:
 
 def test_rank_is_monotonic_per_role() -> None:
     for jur in ("eu", "us"):
-        beams = sections_for("steel_mrf", "beam", jurisdiction=jur)  # type: ignore[arg-type]
+        beams = sections_for("steel_mrf", "beam", jurisdiction=jur)
         assert [s.rank for s in beams] == sorted(s.rank for s in beams)
         # The sort key is rank, and self_weight should also be monotonic
         # because we sort the source data by mass before assigning rank.
