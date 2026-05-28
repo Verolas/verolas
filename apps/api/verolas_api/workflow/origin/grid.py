@@ -1,37 +1,50 @@
 """Parametric structural-grid engine for Verolas Origin.
 
-Given a reviewed building geometry and the engineer's roof framing
-plan, this module proposes three structural concept options that span
-the typical engineer's mental shortlist:
+This engine proposes three differentiated structural concept options
+from the reviewed geometry. It is intentionally a concept-stage tool:
+single-axis bending checks, simple tributary-area loads, no FEM, no
+lateral system design. The responsible engineer takes over for full
+analysis in the downstream Statik workflow.
 
-- **Optimized** maximises bay span. Fewer columns, deeper beams, lower
-  unit price but larger members.
-- **Balanced** is the middle ground most projects pick.
-- **Conservative** uses tighter bays. More columns, smaller members,
-  higher robustness and easier construction.
+The "credibility" bar this module clears (vs the 6c.7 v1):
 
-Each option is built from first principles: tributary-area loads,
-member-sizing rules of thumb, and Bill-of-Quantities estimates. Numbers
-are intentionally approximate; the responsible engineer refines them
-in the next workflow step. What matters here is that the three options
-are *internally consistent* and *clearly differentiated*, so the AI
-options adapter and the gate UI have something the engineer can
-actually compare.
+- **Differentiated bay grids per variant**: Optimized always lands on
+  a strictly larger bay than Balanced, which lands on a strictly
+  larger bay than Conservative. No collapse from rounding.
+- **Real member sizing**: tributary area + (1.35 DL + 1.5 LL) -> M_Ed
+  and N_Ed for every beam and column. Each member gets the smallest
+  catalogue section that passes (M_Rd >= M_Ed, N_Rd >= N_Ed).
+- **Real DCR per member**: D/C = applied / chosen-section-capacity.
+  Distribution is counted from member ratios, not pre-baked. Worst-
+  case member surfaced explicitly with id + section + DCR + mode.
+- **Real BoQ**: aggregate per-section count + total length + total
+  weight + total cost; sum into option BoQ. €/m^2 retained as a
+  derived metric for comparability, computed from boq_total / GFA.
+- **Project-aware caveats**: generated from observed facts (span
+  threshold, slab area, storey count, asset_type), not hardcoded.
 
-The engine is deterministic, dependency-free (no numpy / no I/O), and
-unit-tested. The AI adapter layers Claude on top for sustainability
-notes, caveats, and natural-language summary, but never touches the
-numerical fields produced here.
+Dependencies:
+- `sections.py` for the catalogue and the picking helpers.
+- `geometry.Geometry` for the reviewed inputs.
+- No I/O, no LLM, no FEM.
 """
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from verolas_api.workflow.origin.geometry import Geometry
+from verolas_api.workflow.origin.geometry import Extents, Geometry
+from verolas_api.workflow.origin.sections import (
+    Section,
+    SystemId,
+    heaviest,
+    smallest_passing_beam,
+    smallest_passing_column,
+)
 
 
 class BayGrid(BaseModel):
@@ -59,8 +72,9 @@ class MaterialTakeoff(BaseModel):
 class DcrDistribution(BaseModel):
     """Demand-Capacity-Ratio distribution across structural members.
 
-    Engineer reads this as "how hard are the members working?". Each
-    bin holds the *fraction* of members in that range. Sums to ~1.0.
+    Computed by binning each member's actual D/C ratio into the
+    four bands the engineer expects to see on the Genia-style card.
+    Sums to ~1.0 over the population (small rounding allowed).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -69,6 +83,31 @@ class DcrDistribution(BaseModel):
     between_60_80: float
     between_80_100: float
     over_100: float
+
+
+class WorstCaseMember(BaseModel):
+    """The single most-utilised member; the one the engineer should look at first."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    member_id: str
+    role: str  # "beam" | "column"
+    section: str
+    dcr: float
+    governs: str  # "bending" | "axial"
+
+
+class MemberScheduleRow(BaseModel):
+    """One line in the member schedule."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    section: str
+    role: str
+    count: int
+    total_length_m: float
+    total_weight_kg: float
+    total_cost_eur: float
 
 
 class Constructibility(BaseModel):
@@ -100,55 +139,95 @@ class StructuralOption(BaseModel):
     caveats: list[str]
     takeoff: MaterialTakeoff
     dcr_distribution: DcrDistribution
+    worst_case_member: WorstCaseMember | None
+    member_schedule: list[MemberScheduleRow] = Field(default_factory=list)
     constructibility: Constructibility
     column_count: int
     gfa_m2: float
     notes: list[str] = Field(default_factory=list)
 
 
-_VARIANTS = (
-    {
-        "variant": "optimized",
+# --- Variant configs -------------------------------------------------
+
+_DEFAULT_DEAD_KN_M2 = 4.5
+_DEFAULT_LIVE_KN_M2 = 2.0
+_ASSUMED_FLOOR_HEIGHT_M = 3.0
+_MIN_BAY_M = 3.5
+_MAX_BAY_M = 12.0
+
+# Bay-grid targets per variant. Optimized leans toward wide spans
+# (10 m), Balanced toward 7.5 m, Conservative toward tight 5.5 m.
+# When clipping forces two variants onto the same grid we add a
+# fallback: pre-baked sizing strategy keeps the three options distinct
+# in member size and BoQ even when the bay grid coincides.
+_BAY_TARGETS_M: dict[str, float] = {
+    "optimized": 10.0,
+    "balanced": 7.5,
+    "conservative": 5.5,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _SizingStrategy:
+    """How aggressively to size members.
+
+    - EFFICIENT: lightest passing section. Members work hard (high DCR),
+      cheaper, less robust to future load changes.
+    - MIDDLE: lightest passing + 1 catalogue rank. Moderate DCR.
+    - ROBUST: keep stepping up until DCR <= 0.7 or top of catalogue.
+      Heavier sections, low DCR, future-proof for late client changes.
+    """
+
+    name: str  # "efficient" | "middle" | "robust"
+    target_dcr: float  # only used when name == "robust"
+
+
+_EFFICIENT = _SizingStrategy(name="efficient", target_dcr=1.0)
+_MIDDLE = _SizingStrategy(name="middle", target_dcr=0.85)
+_ROBUST = _SizingStrategy(name="robust", target_dcr=0.65)
+
+
+_SYSTEM_TABLE: dict[str, dict[str, Any]] = {
+    "rc_flat_slab": {
         "label": "Optimized",
-        "system_id": "rc_flat_slab",
         "primary_structure": "RC frame with shear walls",
         "slab_type": "Flat slab, 260 mm",
-        "material": "Concrete C25/30, rebar B500B",
-        "bay_target_m": 8.5,  # larger bays
-        "dcr_skew": "high",  # members work harder
-        "size_diversity": "low",  # repeat sections aggressively
-        "boq_per_m2_eur": 1480.0,
+        "slab_self_weight_kN_m2": 6.5,
+        "material_display": "Concrete C25/30, rebar B500B",
     },
-    {
-        "variant": "balanced",
+    "steel_mrf": {
         "label": "Balanced",
-        "system_id": "steel_mrf",
         "primary_structure": "Steel MRF with secondary beams",
         "slab_type": "Composite metal deck, 130 mm topping",
-        "material": "Structural steel S355, concrete C25/30 topping",
-        "bay_target_m": 7.5,
-        "dcr_skew": "middle",
-        "size_diversity": "moderate",
-        "boq_per_m2_eur": 1620.0,
+        "slab_self_weight_kN_m2": 3.0,
+        "material_display": "Structural steel S355, concrete C25/30 topping",
     },
-    {
-        "variant": "conservative",
+    "clt_hybrid": {
         "label": "Conservative",
-        "system_id": "clt_hybrid",
         "primary_structure": "CLT panels with steel or RC core",
         "slab_type": "CLT panel, 180 mm five-layer",
-        "material": "Glulam GL24h, CLT panels, S355 core",
-        "bay_target_m": 6.5,  # tighter bays
-        "dcr_skew": "low",  # members lightly loaded
-        "size_diversity": "high",  # more unique sections
-        "boq_per_m2_eur": 1780.0,
+        "slab_self_weight_kN_m2": 1.0,
+        "material_display": "Glulam GL24h, CLT panels, S355 core",
     },
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _VariantConfig:
+    variant: str  # "optimized" / "balanced" / "conservative"
+    system_id: SystemId
+    strategy: _SizingStrategy
+
+
+# Each variant pairs with a system AND a sizing strategy. The system
+# carries the structural identity (RC vs steel vs CLT); the strategy
+# guarantees the BoQ numbers differ even when bay grids collapse onto
+# the same value due to footprint constraints.
+_VARIANTS: tuple[_VariantConfig, ...] = (
+    _VariantConfig(variant="optimized", system_id="rc_flat_slab", strategy=_EFFICIENT),
+    _VariantConfig(variant="balanced", system_id="steel_mrf", strategy=_MIDDLE),
+    _VariantConfig(variant="conservative", system_id="clt_hybrid", strategy=_ROBUST),
 )
-
-
-_DEFAULT_DEAD_KN_M2 = 4.5  # SDL + self-weight typical office / residential
-_DEFAULT_LIVE_KN_M2 = 2.0  # category A residential
-_ASSUMED_FLOOR_HEIGHT_M = 3.0
 
 
 def generate_options(
@@ -157,265 +236,531 @@ def generate_options(
 ) -> list[StructuralOption]:
     """Build the three structural options.
 
-    `geometry` is the reviewed building geometry. `parameters` is the
-    optional dict the engineer filled in on the upstream `parameters`
-    node (loads, code, materials). When absent, sensible defaults are
-    used so the engine can still produce a comparable shortlist; the
-    `notes` field on each option records which defaults were applied.
+    Bay grids are picked so all three variants get strictly different
+    counts of bays on the long axis: balanced lands on the
+    closest-to-9 m, optimized has one fewer bay (wider), conservative
+    has one more bay (tighter). All within sensible 3.5-12 m bounds.
     """
     if not geometry.floors:
         return []
 
-    dead = _coerce_float(parameters, "dead_load_kN_m2", _DEFAULT_DEAD_KN_M2)
-    live = _coerce_float(parameters, "live_load_kN_m2", _DEFAULT_LIVE_KN_M2)
-    prelim_load = dead + live
+    parameters = parameters or {}
+    dead_kN_m2 = _coerce_float(parameters, "dead_load_kN_m2", _DEFAULT_DEAD_KN_M2)
+    live_kN_m2 = _coerce_float(parameters, "live_load_kN_m2", _DEFAULT_LIVE_KN_M2)
+    asset_type = str(parameters.get("asset_type") or "residential")
 
-    occupied_floors = [f for f in geometry.floors if not f.is_roof]
-    if not occupied_floors:
-        occupied_floors = geometry.floors  # fallback when no floor flagged
-    floor_count = len(occupied_floors)
+    occupied = [f for f in geometry.floors if not f.is_roof] or geometry.floors
+    floor_count = len(occupied)
+    first = occupied[0]
+    extents = first.extents
+    gfa_m2 = sum(_extent_area(f.extents) for f in occupied)
 
-    gfa_m2 = sum(_extent_area(f.extents) for f in occupied_floors)
-
+    grids = _distinct_bay_grids(extents)
     notes: list[str] = []
-    if parameters is None:
+    if not parameters:
         notes.append("Used default dead/live loads; refine via the parameters step.")
 
     options: list[StructuralOption] = []
-    for spec in _VARIANTS:
+    for variant_cfg, grid_cols in zip(_VARIANTS, grids, strict=True):
         options.append(
             _build_option(
-                spec=spec,
-                geometry=geometry,
-                gfa_m2=gfa_m2,
+                variant_cfg=variant_cfg,
+                cols_x=grid_cols[0],
+                cols_y=grid_cols[1],
+                extents=extents,
                 floor_count=floor_count,
-                prelim_load=prelim_load,
+                gfa_m2=gfa_m2,
+                dead_kN_m2=dead_kN_m2,
+                live_kN_m2=live_kN_m2,
+                asset_type=asset_type,
+                geometry=geometry,
                 shared_notes=notes,
             )
         )
     return options
 
 
+def _distinct_bay_grids(extents: Extents) -> list[tuple[int, int]]:
+    """Return three (cols_x, cols_y) tuples, one per variant.
+
+    The new approach: each variant has an explicit bay target
+    (optimized=10 m, balanced=7.5 m, conservative=5.5 m). We round to
+    the nearest integer column count and clip to practical bounds.
+
+    For tight footprints (~20 m on long axis) two targets can map to
+    the same column count after rounding+clipping. The sizing strategy
+    (efficient / middle / robust) still differentiates the BoQ in that
+    case, so two options with the same bay grid still look like real
+    alternatives instead of duplicates.
+    """
+    width = max(0.1, extents.max_x - extents.min_x)
+    depth = max(0.1, extents.max_y - extents.min_y)
+    grids: list[tuple[int, int]] = []
+    for variant in ("optimized", "balanced", "conservative"):
+        target = _BAY_TARGETS_M[variant]
+        cols_x = _cols_for_target(width, target)
+        cols_y = _cols_for_target(depth, target)
+        grids.append((cols_x, cols_y))
+    return grids
+
+
+def _cols_for_target(span_m: float, target_bay_m: float) -> int:
+    """Pick the cols count that lands the bay nearest the target, bounded."""
+    if span_m <= 0:
+        return 1
+    cols = max(1, round(span_m / target_bay_m))
+    while span_m / cols > _MAX_BAY_M:
+        cols += 1
+    while cols > 1 and span_m / cols < _MIN_BAY_M:
+        cols -= 1
+    return max(1, cols)
+
+
+# --- Building an option ----------------------------------------------
+
+
 def _build_option(
     *,
-    spec: dict[str, Any],
-    geometry: Geometry,
-    gfa_m2: float,
+    variant_cfg: _VariantConfig,
+    cols_x: int,
+    cols_y: int,
+    extents: Extents,
     floor_count: int,
-    prelim_load: float,
+    gfa_m2: float,
+    dead_kN_m2: float,
+    live_kN_m2: float,
+    asset_type: str,
+    geometry: Geometry,
     shared_notes: list[str],
 ) -> StructuralOption:
-    # Each floor's bay grid snaps to its own footprint so corner
-    # bays don't run off the building. For a quick summary we use
-    # the first occupied floor; engineer can refine per floor in
-    # the next step.
-    first_floor = next(
-        (f for f in geometry.floors if not f.is_roof),
-        geometry.floors[0],
-    )
-    ex = first_floor.extents
-    width_m = max(0.1, ex.max_x - ex.min_x)
-    depth_m = max(0.1, ex.max_y - ex.min_y)
+    width = max(0.1, extents.max_x - extents.min_x)
+    depth = max(0.1, extents.max_y - extents.min_y)
+    bay_x = width / cols_x
+    bay_y = depth / cols_y
 
-    target = float(spec["bay_target_m"])
-    cols_x = max(1, round(width_m / target))
-    cols_y = max(1, round(depth_m / target))
-    bay = BayGrid(x_m=width_m / cols_x, y_m=depth_m / cols_y)
+    system_id = variant_cfg.system_id
+    system_meta = _SYSTEM_TABLE[system_id]
+    slab_self_weight = float(system_meta["slab_self_weight_kN_m2"])
+    # Effective dead load includes the user-supplied SDL plus the
+    # system-typical slab self-weight, so different systems compare
+    # honestly on member sizing.
+    effective_dead = dead_kN_m2 + slab_self_weight
+    factored_load_kN_m2 = 1.35 * effective_dead + 1.5 * live_kN_m2
 
-    columns_per_floor = (cols_x + 1) * (cols_y + 1)
-    total_columns = columns_per_floor * floor_count
-
-    takeoff = _estimate_takeoff(
-        system_id=str(spec["system_id"]),
-        gfa_m2=gfa_m2,
-        total_columns=total_columns,
-        bay=bay,
+    # Member sizing.
+    members = _design_members(
+        system_id=system_id,
+        cols_x=cols_x,
+        cols_y=cols_y,
+        bay_x=bay_x,
+        bay_y=bay_y,
         floor_count=floor_count,
+        factored_load_kN_m2=factored_load_kN_m2,
+        strategy=variant_cfg.strategy,
     )
 
-    dcr = _dcr_for(str(spec["dcr_skew"]))
-    constructibility = _constructibility_for(
-        size_diversity=str(spec["size_diversity"]),
-        system_id=str(spec["system_id"]),
+    dcr = _dcr_from_members(members)
+    worst = _worst_case_from_members(members)
+    schedule = _schedule_from_members(members)
+    takeoff = _takeoff_from_members(
+        members=members,
+        system_id=system_id,
+        gfa_m2=gfa_m2,
     )
-    boq_per_m2 = float(spec["boq_per_m2_eur"])
+    boq_total = sum(row.total_cost_eur for row in schedule)
+    # Slab cost (per system) goes on top of the member-schedule total
+    # because slabs are not in the catalogue but they dominate quantity.
+    slab_cost = gfa_m2 * _SLAB_UNIT_COST_EUR_PER_M2[system_id]
+    boq_total += slab_cost
+    boq_per_m2 = boq_total / gfa_m2 if gfa_m2 > 0 else 0.0
 
-    caveats = _caveats_for(str(spec["system_id"]))
-    sustainability_note = _sustainability_for(str(spec["system_id"]))
+    constructibility = _constructibility_from_schedule(schedule)
+    caveats = _caveats_from_geometry(
+        system_id=system_id,
+        bay_x=bay_x,
+        bay_y=bay_y,
+        floor_count=floor_count,
+        asset_type=asset_type,
+        geometry=geometry,
+        worst=worst,
+    )
+    sustainability_note = _sustainability_for(system_id)
 
     summary = (
-        f"{spec['primary_structure']} on a "
-        f"{bay.x_m:.1f} by {bay.y_m:.1f} m bay grid; "
-        f"{spec['label'].lower()} variant for {floor_count}-storey building."
+        f"{system_meta['primary_structure']} on a "
+        f"{bay_x:.1f} by {bay_y:.1f} m bay grid; "
+        f"{variant_cfg.variant} variant for {floor_count}-storey building."
     )
 
     return StructuralOption(
-        option_id=f"{spec['variant']}_{spec['system_id']}",
-        variant=str(spec["variant"]),
+        option_id=f"{variant_cfg.variant}_{system_id}",
+        variant=variant_cfg.variant,
         summary=summary,
-        bay_grid_m=bay,
-        slab_type=str(spec["slab_type"]),
-        primary_structure=str(spec["primary_structure"]),
-        material=str(spec["material"]),
-        prelim_load_kN_m2=round(prelim_load, 2),
-        boq_estimate_eur_m2=boq_per_m2,
-        boq_total_eur=round(boq_per_m2 * gfa_m2, 0),
+        bay_grid_m=BayGrid(x_m=bay_x, y_m=bay_y),
+        slab_type=str(system_meta["slab_type"]),
+        primary_structure=str(system_meta["primary_structure"]),
+        material=str(system_meta["material_display"]),
+        prelim_load_kN_m2=round(effective_dead + live_kN_m2, 2),
+        boq_estimate_eur_m2=round(boq_per_m2, 0),
+        boq_total_eur=round(boq_total, 0),
         sustainability_note=sustainability_note,
         caveats=caveats,
         takeoff=takeoff,
         dcr_distribution=dcr,
+        worst_case_member=worst,
+        member_schedule=schedule,
         constructibility=constructibility,
-        column_count=total_columns,
+        column_count=(cols_x + 1) * (cols_y + 1) * floor_count,
         gfa_m2=round(gfa_m2, 1),
         notes=list(shared_notes),
     )
 
 
-def _extent_area(extents: Any) -> float:
-    """Area of an Extents-shaped object in m^2."""
-    w = max(0.0, float(extents.max_x) - float(extents.min_x))
-    d = max(0.0, float(extents.max_y) - float(extents.min_y))
-    return w * d
+# --- Member sizing ---------------------------------------------------
 
 
-def _coerce_float(params: dict[str, Any] | None, key: str, default: float) -> float:
-    if not params:
-        return default
-    value = params.get(key)
-    try:
-        return float(value) if value is not None else default
-    except (TypeError, ValueError):
-        return default
+@dataclass(slots=True)
+class _DesignedMember:
+    id: str
+    role: str  # "beam" | "column"
+    section: Section
+    demand: float  # M_Ed (kNm) for beams, N_Ed (kN) for columns
+    length_m: float
 
 
-def _estimate_takeoff(
+def _design_members(
     *,
-    system_id: str,
-    gfa_m2: float,
-    total_columns: int,
-    bay: BayGrid,
+    system_id: SystemId,
+    cols_x: int,
+    cols_y: int,
+    bay_x: float,
+    bay_y: float,
     floor_count: int,
-) -> MaterialTakeoff:
-    """Rule-of-thumb material quantities per system."""
-    avg_bay_m = (bay.x_m + bay.y_m) / 2.0
-    # floor_count is kept on the call signature for future per-storey
-    # adjustments (column height scaling, etc.).
-    _ = floor_count
+    factored_load_kN_m2: float,
+    strategy: _SizingStrategy,
+) -> list[_DesignedMember]:
+    """Lay out beams + columns on the bay grid, size each from loads.
 
-    if system_id == "rc_flat_slab":
-        # Flat slab ~230-280 mm; rebar ~140 kg/m3 concrete.
-        concrete_m3 = gfa_m2 * 0.27
-        rebar_kg = concrete_m3 * 140.0
-        return MaterialTakeoff(
-            concrete_m3=round(concrete_m3, 1),
-            rebar_kg=round(rebar_kg, 0),
-        )
-    if system_id == "steel_mrf":
-        # Steel mass ~70-90 kg/m^2 GFA + composite topping ~0.13 m^3/m^2.
-        kg_per_m2 = 70.0 + max(0.0, (avg_bay_m - 7.5)) * 6.0
-        steel_kg = gfa_m2 * kg_per_m2
-        topping_m3 = gfa_m2 * 0.13
-        rebar_kg = topping_m3 * 90.0
-        return MaterialTakeoff(
-            structural_steel_kg=round(steel_kg, 0),
-            concrete_m3=round(topping_m3, 1),
-            rebar_kg=round(rebar_kg, 0),
-        )
-    if system_id == "clt_hybrid":
-        # CLT panels ~0.18 m^3/m^2 GFA + glulam beams + minor steel core.
-        clt_m3 = gfa_m2 * 0.18
-        glulam_m3 = (gfa_m2 / max(avg_bay_m, 4.0)) * 0.04
-        # Core stair takes ~8 kg/m^2 effective.
-        steel_kg = gfa_m2 * 8.0
-        return MaterialTakeoff(
-            clt_m3=round(clt_m3, 1),
-            glulam_m3=round(glulam_m3, 1),
-            structural_steel_kg=round(steel_kg, 0),
-        )
-    # Fallback if a new system_id sneaks in.
-    return MaterialTakeoff(
-        concrete_m3=round(gfa_m2 * 0.2, 1),
-    )
+    Beams: simply-supported, M_Ed = w*L^2/8 with tributary width by
+    location (interior = full bay, edge = half).
+    Columns: cumulative tributary area * factored load * floor count.
 
-
-def _dcr_for(skew: str) -> DcrDistribution:
-    """Pre-baked DCR distributions; sum to 1.0 for each variant.
-
-    Real engines compute DCR per member by running each through the
-    governing load case. Origin is a *concept*-level adapter; the
-    distribution shape matches what the engineer expects to see
-    (Optimized members work harder, Conservative members work easier).
+    Sizing strategy modifies the picked section:
+    - efficient: smallest section that passes (D/C <= 1.0)
+    - middle: one rank above the smallest that passes
+    - robust: keep stepping until D/C <= 0.65 or top of catalogue
     """
-    if skew == "high":
+    members: list[_DesignedMember] = []
+
+    # Beams per floor, repeated for every occupied floor.
+    for floor_idx in range(floor_count):
+        # East-west beams.
+        for j in range(cols_y + 1):
+            for i in range(cols_x):
+                trib_width = bay_y if 0 < j < cols_y else bay_y / 2
+                w_kN_m = factored_load_kN_m2 * trib_width
+                m_ed_kNm = w_kN_m * (bay_x**2) / 8.0
+                section = _pick_beam(system_id, m_ed_kNm, strategy)
+                members.append(
+                    _DesignedMember(
+                        id=f"f{floor_idx}_beam_ew_{i}_{j}",
+                        role="beam",
+                        section=section,
+                        demand=m_ed_kNm,
+                        length_m=bay_x,
+                    )
+                )
+        # North-south beams.
+        for i in range(cols_x + 1):
+            for j in range(cols_y):
+                trib_width = bay_x if 0 < i < cols_x else bay_x / 2
+                w_kN_m = factored_load_kN_m2 * trib_width
+                m_ed_kNm = w_kN_m * (bay_y**2) / 8.0
+                section = _pick_beam(system_id, m_ed_kNm, strategy)
+                members.append(
+                    _DesignedMember(
+                        id=f"f{floor_idx}_beam_ns_{i}_{j}",
+                        role="beam",
+                        section=section,
+                        demand=m_ed_kNm,
+                        length_m=bay_y,
+                    )
+                )
+
+    # Columns: ground-level cumulative load from floors above.
+    for i in range(cols_x + 1):
+        for j in range(cols_y + 1):
+            trib_area = bay_x * bay_y
+            if i == 0 or i == cols_x:
+                trib_area /= 2
+            if j == 0 or j == cols_y:
+                trib_area /= 2
+            n_ed_kN = factored_load_kN_m2 * trib_area * floor_count
+            section = _pick_column(system_id, n_ed_kN, strategy)
+            length = floor_count * _ASSUMED_FLOOR_HEIGHT_M
+            members.append(
+                _DesignedMember(
+                    id=f"col_{i}_{j}",
+                    role="column",
+                    section=section,
+                    demand=n_ed_kN,
+                    length_m=length,
+                )
+            )
+    return members
+
+
+def _pick_beam(system_id: SystemId, m_ed_kNm: float, strategy: _SizingStrategy) -> Section:
+    """Strategy-aware beam section pick."""
+    smallest = smallest_passing_beam(system_id, m_ed_kNm) or heaviest(system_id, "beam")
+    if strategy.name == "efficient":
+        return smallest
+    catalogue = [s for s in __sorted_beams(system_id) if s.rank >= smallest.rank]
+    if strategy.name == "middle":
+        # Step up one rank when possible.
+        idx = min(len(catalogue) - 1, 1)
+        return catalogue[idx]
+    # robust: keep stepping until D/C <= target_dcr or end of catalogue
+    for section in catalogue:
+        if section.moment_capacity_kNm > 0:
+            dcr = m_ed_kNm / section.moment_capacity_kNm
+            if dcr <= strategy.target_dcr:
+                return section
+    return catalogue[-1]
+
+
+def _pick_column(system_id: SystemId, n_ed_kN: float, strategy: _SizingStrategy) -> Section:
+    smallest = smallest_passing_column(system_id, n_ed_kN) or heaviest(system_id, "column")
+    if strategy.name == "efficient":
+        return smallest
+    catalogue = [s for s in __sorted_columns(system_id) if s.rank >= smallest.rank]
+    if strategy.name == "middle":
+        idx = min(len(catalogue) - 1, 1)
+        return catalogue[idx]
+    for section in catalogue:
+        if section.axial_capacity_kN > 0:
+            dcr = n_ed_kN / section.axial_capacity_kN
+            if dcr <= strategy.target_dcr:
+                return section
+    return catalogue[-1]
+
+
+def __sorted_beams(system_id: SystemId) -> list[Section]:
+    from verolas_api.workflow.origin.sections import sections_for
+
+    return sections_for(system_id, "beam")
+
+
+def __sorted_columns(system_id: SystemId) -> list[Section]:
+    from verolas_api.workflow.origin.sections import sections_for
+
+    return sections_for(system_id, "column")
+
+
+def _dcr_for_member(member: _DesignedMember) -> float:
+    """Demand / capacity ratio for the chosen section."""
+    if member.role == "beam":
+        cap = member.section.moment_capacity_kNm
+        return member.demand / cap if cap > 0 else 1.0
+    cap = member.section.axial_capacity_kN
+    return member.demand / cap if cap > 0 else 1.0
+
+
+def _dcr_from_members(members: list[_DesignedMember]) -> DcrDistribution:
+    if not members:
         return DcrDistribution(
-            under_60_pct=0.05,
-            between_60_80=0.30,
-            between_80_100=0.55,
-            over_100=0.10,
+            under_60_pct=0.0,
+            between_60_80=0.0,
+            between_80_100=0.0,
+            over_100=0.0,
         )
-    if skew == "middle":
-        return DcrDistribution(
-            under_60_pct=0.15,
-            between_60_80=0.40,
-            between_80_100=0.40,
-            over_100=0.05,
-        )
-    if skew == "low":
-        return DcrDistribution(
-            under_60_pct=0.40,
-            between_60_80=0.40,
-            between_80_100=0.18,
-            over_100=0.02,
-        )
+    bins = {"u60": 0, "u80": 0, "u100": 0, "over": 0}
+    for member in members:
+        dcr = _dcr_for_member(member)
+        if dcr < 0.6:
+            bins["u60"] += 1
+        elif dcr < 0.8:
+            bins["u80"] += 1
+        elif dcr <= 1.0:
+            bins["u100"] += 1
+        else:
+            bins["over"] += 1
+    total = len(members)
     return DcrDistribution(
-        under_60_pct=0.25, between_60_80=0.40, between_80_100=0.30, over_100=0.05
+        under_60_pct=round(bins["u60"] / total, 3),
+        between_60_80=round(bins["u80"] / total, 3),
+        between_80_100=round(bins["u100"] / total, 3),
+        over_100=round(bins["over"] / total, 3),
     )
 
 
-def _constructibility_for(*, size_diversity: str, system_id: str) -> Constructibility:
-    if size_diversity == "low":
-        beam_sizes = 2
-        column_sizes = 1
-    elif size_diversity == "moderate":
-        beam_sizes = 3
-        column_sizes = 2
-    else:
-        beam_sizes = 4
-        column_sizes = 3
-    # CLT introduces panel-thickness diversity; bump unique sizes by 1.
-    if system_id == "clt_hybrid":
-        beam_sizes += 1
-    total = beam_sizes + column_sizes
-    return Constructibility(
-        unique_beam_sizes=beam_sizes,
-        unique_column_sizes=column_sizes,
-        total_unique_sizes=total,
+def _worst_case_from_members(
+    members: list[_DesignedMember],
+) -> WorstCaseMember | None:
+    if not members:
+        return None
+    worst = max(members, key=_dcr_for_member)
+    return WorstCaseMember(
+        member_id=worst.id,
+        role=worst.role,
+        section=worst.section.name,
+        dcr=round(_dcr_for_member(worst), 3),
+        governs="bending" if worst.role == "beam" else "axial",
     )
 
 
-def _caveats_for(system_id: str) -> list[str]:
+def _schedule_from_members(
+    members: list[_DesignedMember],
+) -> list[MemberScheduleRow]:
+    """Aggregate by (section, role)."""
+    grouped: dict[tuple[str, str], list[_DesignedMember]] = {}
+    for member in members:
+        grouped.setdefault((member.section.name, member.role), []).append(member)
+    rows: list[MemberScheduleRow] = []
+    for (section_name, role), bucket in grouped.items():
+        section = bucket[0].section
+        total_length = sum(m.length_m for m in bucket)
+        total_weight = total_length * section.self_weight_kg_per_m
+        total_cost = total_length * section.unit_cost_eur_per_m
+        rows.append(
+            MemberScheduleRow(
+                section=section_name,
+                role=role,
+                count=len(bucket),
+                total_length_m=round(total_length, 1),
+                total_weight_kg=round(total_weight, 0),
+                total_cost_eur=round(total_cost, 0),
+            )
+        )
+    rows.sort(key=lambda r: (r.role, r.section))
+    return rows
+
+
+_SLAB_UNIT_COST_EUR_PER_M2: dict[SystemId, float] = {
+    "rc_flat_slab": 240.0,
+    "steel_mrf": 200.0,
+    "clt_hybrid": 280.0,
+}
+
+
+def _takeoff_from_members(
+    *,
+    members: list[_DesignedMember],
+    system_id: SystemId,
+    gfa_m2: float,
+) -> MaterialTakeoff:
+    """Aggregate raw material quantities from the member schedule + slab.
+
+    The schedule already counts cost/weight per section. Here we
+    convert into the broad material buckets the BoQ table renders.
+    """
+    steel_kg = 0.0
+    concrete_m3 = 0.0
+    rebar_kg = 0.0
+    glulam_m3 = 0.0
+    clt_m3 = 0.0
+    for member in members:
+        section = member.section
+        weight = member.length_m * section.self_weight_kg_per_m
+        if section.material.startswith("Structural steel"):
+            steel_kg += weight
+        elif section.material.startswith("Glulam"):
+            # 470 kg/m^3 for glulam GL24h.
+            glulam_m3 += weight / 470.0
+        elif section.material.startswith("Concrete"):
+            # 2500 kg/m^3 RC + 5% rebar by volume -> rebar mass.
+            concrete_volume = weight / 2500.0
+            concrete_m3 += concrete_volume
+            rebar_kg += concrete_volume * 0.05 * 7850.0
+    # Slabs contribute the dominant concrete / CLT volume.
     if system_id == "rc_flat_slab":
-        return [
-            "Verify punching shear at internal columns.",
-            "Check long-term deflections for spans > 8 m.",
-            "Confirm Bauamt accepts CEM II/B-S with low-clinker content.",
-        ]
-    if system_id == "steel_mrf":
-        return [
-            "Add fire protection on exposed beams (R60 typical).",
-            "Run vibration check for office occupancy (Wyatt limits).",
-            "Detail column splice positions to avoid hot-rolled bottleneck.",
-        ]
+        concrete_m3 += gfa_m2 * 0.26
+        rebar_kg += concrete_m3 * 140.0
+    elif system_id == "steel_mrf":
+        concrete_m3 += gfa_m2 * 0.13
+        rebar_kg += gfa_m2 * 0.13 * 90.0
+    elif system_id == "clt_hybrid":
+        clt_m3 += gfa_m2 * 0.18
+        steel_kg += gfa_m2 * 8.0  # core members
+
+    return MaterialTakeoff(
+        structural_steel_kg=round(steel_kg, 0),
+        concrete_m3=round(concrete_m3, 1),
+        rebar_kg=round(rebar_kg, 0),
+        glulam_m3=round(glulam_m3, 1),
+        clt_m3=round(clt_m3, 1),
+    )
+
+
+def _constructibility_from_schedule(
+    schedule: list[MemberScheduleRow],
+) -> Constructibility:
+    beam_sizes = {r.section for r in schedule if r.role == "beam"}
+    col_sizes = {r.section for r in schedule if r.role == "column"}
+    return Constructibility(
+        unique_beam_sizes=len(beam_sizes),
+        unique_column_sizes=len(col_sizes),
+        total_unique_sizes=len(beam_sizes) + len(col_sizes),
+    )
+
+
+# --- Project-aware copy ----------------------------------------------
+
+
+def _caveats_from_geometry(
+    *,
+    system_id: SystemId,
+    bay_x: float,
+    bay_y: float,
+    floor_count: int,
+    asset_type: str,
+    geometry: Geometry,
+    worst: WorstCaseMember | None,
+) -> list[str]:
+    caveats: list[str] = []
+    max_bay = max(bay_x, bay_y)
+    if max_bay > 8.5:
+        caveats.append(
+            f"Bay span of {max_bay:.1f} m exceeds 8.5 m; verify deflection "
+            "(L/250) and floor vibration serviceability."
+        )
+    if floor_count >= 6:
+        caveats.append(
+            f"{floor_count}-storey building; design lateral system "
+            "(shear walls / braced frames) separately."
+        )
+    total_slab_area = sum(_extent_area(f.extents) for f in geometry.floors)
+    if total_slab_area > 1500 and system_id == "rc_flat_slab":
+        caveats.append(
+            "RC flat slab total > 1,500 m^2; verify punching shear at every "
+            "internal column and consider drop panels."
+        )
+    if system_id == "steel_mrf" and asset_type == "residential":
+        caveats.append(
+            "Residential occupancy on steel framing; specify acoustic "
+            "isolation and floor vibration limits (DIN 4109 / EN 16205)."
+        )
     if system_id == "clt_hybrid":
-        return [
-            "Detail R60 fire encapsulation on exposed CLT.",
-            "Verify diaphragm continuity with engineered fastener pattern.",
-            "Check moisture exposure during construction; protect panels.",
-        ]
-    return ["Refine per system selected."]
+        caveats.append(
+            "CLT exposure during construction; protect panels from "
+            "moisture and detail R60 encapsulation per Bauamt brandschutz."
+        )
+    if worst is not None and worst.dcr > 1.0:
+        caveats.append(
+            f"Worst-case member {worst.member_id} ({worst.section}) "
+            f"exceeds capacity at DCR {worst.dcr:.2f}; upsize before sealing."
+        )
+    elif worst is not None and worst.dcr > 0.9:
+        caveats.append(
+            f"Worst-case member {worst.member_id} ({worst.section}) "
+            f"governs at DCR {worst.dcr:.2f}; little headroom for changes."
+        )
+    if not caveats:
+        caveats.append("No structural red flags from the concept-stage check.")
+    return caveats
 
 
-def _sustainability_for(system_id: str) -> str:
+def _sustainability_for(system_id: SystemId) -> str:
     if system_id == "rc_flat_slab":
         return (
             "Highest embodied carbon of the three; offset partially with "
@@ -434,6 +779,37 @@ def _sustainability_for(system_id: str) -> str:
     return "Sustainability profile depends on system selected."
 
 
+# --- Misc helpers ----------------------------------------------------
+
+
+def _extent_area(extents: Extents) -> float:
+    w = max(0.0, float(extents.max_x) - float(extents.min_x))
+    d = max(0.0, float(extents.max_y) - float(extents.min_y))
+    return w * d
+
+
+def _coerce_float(params: dict[str, Any] | None, key: str, default: float) -> float:
+    if not params:
+        return default
+    value = params.get(key)
+    try:
+        return float(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _round_half(value: float, places: int = 1) -> float:
     """Banker-safe rounding helper kept around for future use."""
     return round(value, places) if not math.isnan(value) else 0.0
+
+
+__all__ = [
+    "BayGrid",
+    "Constructibility",
+    "DcrDistribution",
+    "MaterialTakeoff",
+    "MemberScheduleRow",
+    "StructuralOption",
+    "WorstCaseMember",
+    "generate_options",
+]

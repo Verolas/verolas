@@ -1,0 +1,331 @@
+# Verolas Origin - machine-readable data source manifest.
+#
+# Consumed by:
+#   - data/origin/scripts/fetch_all.sh       (downloads to local cache)
+#   - data/origin/scripts/validate_manifest.py  (sha256 + presence check)
+#   - apps/api/verolas_api/workflow/origin/data_loader.py  (resolves a
+#     source_id to its local file path at runtime; to be added in P3)
+#
+# Editing rules:
+#   - Every source has a unique `id` (dot-separated, snake_case).
+#   - `url` is the canonical source-of-truth.
+#   - `license` is SPDX where possible, or a free-form string for
+#     publisher-specific licences. Always record `attribution_required`.
+#   - `manual: true` means fetch_all.sh prints instructions and does
+#     NOT download (ToS gate, registration, or login wall).
+#   - `consumed_by` lists the engine modules that read this source.
+
+version: 2
+last_updated: 2026-05-27
+
+sources:
+
+  # -------------------- US section properties --------------------
+
+  - id: aisc.shapes_v15_xlsx
+    name: "AISC Shapes Database v15.0 (XLSX)"
+    publisher: "American Institute of Steel Construction (via ambaker1/aisc-csv MIT mirror)"
+    region: us
+    url: "https://github.com/ambaker1/aisc-csv"
+    download_url: "https://raw.githubusercontent.com/ambaker1/aisc-csv/main/v15.0/aisc-shapes-database-v15.0.xlsx"
+    license: "MIT (wrapper); AISC public-release (data)"
+    attribution_required: true
+    attribution_string: "Section properties: AISC Shapes Database v15.0 (AISC), redistributed via the ambaker1/aisc-csv MIT mirror."
+    format: xlsx
+    local_path: aisc/aisc-shapes-database-v15.0.xlsx
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: aisc.shapes_v15_csv_us
+    name: "AISC Shapes v15 US-customary CSV"
+    publisher: "ambaker1/aisc-csv"
+    region: us
+    download_url: "https://raw.githubusercontent.com/ambaker1/aisc-csv/main/v15.0/Shapes-US.csv"
+    license: "MIT (wrapper); AISC public-release (data)"
+    attribution_required: true
+    format: csv
+    local_path: aisc/aisc-shapes-v15-us.csv
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: aisc.shapes_v15_csv_si
+    name: "AISC Shapes v15 SI CSV"
+    publisher: "ambaker1/aisc-csv"
+    region: us
+    download_url: "https://raw.githubusercontent.com/ambaker1/aisc-csv/main/v15.0/Shapes-SI.csv"
+    license: "MIT (wrapper); AISC public-release (data)"
+    attribution_required: true
+    format: csv
+    local_path: aisc/aisc-shapes-v15-si.csv
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: aisc.spec_360_22
+    name: "ANSI/AISC 360-22 Specification for Structural Steel Buildings"
+    publisher: "American Institute of Steel Construction"
+    region: us
+    url: "https://www.aisc.org/Specification-for-Structural-Steel-Buildings-ANSIAISC-360-22-Download"
+    license: "AISC public release (copyright AISC)"
+    attribution_required: true
+    attribution_string: "Capacities computed per ANSI/AISC 360-22."
+    format: pdf
+    local_path: aisc/ansi_aisc_360_22.pdf
+    manual: true
+    notes: |
+      AISC click-through gate. Reference document; not parsed automatically.
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py (reference)
+
+  # -------------------- JRC Eurocode background pack --------------------
+
+  - id: jrc.steel_examples
+    name: "JRC Eurocode Steel Worked Examples (JRC96658)"
+    publisher: "EU Commission Joint Research Centre"
+    region: eu
+    url: "https://eurocodes.jrc.ec.europa.eu/publications/eurocodes-background-applications-design-steel-buildings-worked-examples"
+    download_url: "https://eurocodes.jrc.ec.europa.eu/sites/default/files/2021-12/jrc_steel_report_2015_07_22.pdf"
+    license: "EC public-domain reuse"
+    attribution_required: true
+    attribution_string: "Eurocode 3 worked examples: JRC96658, EU Commission, 2015."
+    format: pdf
+    local_path: jrc/jrc96658_steel_worked_examples.pdf
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py (reference)
+      - tests/origin/test_steel_capacity_jrc.py (test vectors)
+
+  - id: jrc.concrete_examples
+    name: "JRC Eurocode 2 Concrete Worked Examples (JRC89037)"
+    publisher: "EU Commission Joint Research Centre"
+    region: eu
+    url: "https://publications.jrc.ec.europa.eu/repository/handle/JRC89037"
+    download_url: "https://publications.jrc.ec.europa.eu/repository/bitstream/JRC89037/reqno_jrc89037_eurocode%202%20design%20of%20concrete%20buildings.%20worked%20examples..pdf"
+    license: "EC public-domain reuse"
+    attribution_required: true
+    attribution_string: "Eurocode 2 worked examples: JRC89037, EU Commission, 2014."
+    format: pdf
+    local_path: jrc/jrc89037_concrete_worked_examples.pdf
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/grid.py (reference)
+      - tests/origin/test_concrete_capacity_jrc.py (test vectors)
+
+  - id: jrc.bridge_examples
+    name: "JRC Bridge Design Worked Examples (EUR 25193 EN, 2012)"
+    publisher: "EU Commission Joint Research Centre"
+    region: eu
+    download_url: "https://eurocodes.jrc.ec.europa.eu/sites/default/files/2022-06/Bridge_Design-Eurocodes-Worked_examples-main_only.pdf"
+    license: "EC public-domain reuse"
+    attribution_required: true
+    attribution_string: "Bridge design: JRC EUR 25193 EN, EU Commission, 2012."
+    format: pdf
+    local_path: jrc/eur25193_bridge_design_worked_examples.pdf
+    manual: false
+    consumed_by:
+      - reference (future bridge workflow)
+
+  - id: jrc.seismic_examples
+    name: "JRC EC8 Seismic Design Worked Examples (EUR 25204 EN, 2012)"
+    publisher: "EU Commission Joint Research Centre"
+    region: eu
+    download_url: "https://eurocodes.jrc.ec.europa.eu/sites/default/files/2022-06/EC8_Seismic_Design_of_Buildings-Worked_examples-main_only.pdf"
+    license: "EC public-domain reuse"
+    attribution_required: true
+    attribution_string: "Seismic design: JRC EUR 25204 EN, EU Commission, 2012."
+    format: pdf
+    local_path: jrc/eur25204_ec8_seismic_worked_examples.pdf
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/loads.py (reference, future)
+
+  # -------------------- EU section properties --------------------
+
+  - id: eu-steel.i_profiles
+    name: "European I-profiles JSON (IPE / HEA / HEB / HEM) via eurocodepy"
+    publisher: "Paulo Cachim / eurocodepy"
+    region: eu
+    url: "https://github.com/pcachim/eurocodepy"
+    download_url: "https://raw.githubusercontent.com/pcachim/eurocodepy/master/src/eurocodepy/data/i_profiles_euro.json"
+    license: "MIT"
+    attribution_required: true
+    attribution_string: "European section properties: pcachim/eurocodepy (MIT)."
+    format: json
+    local_path: eu-steel/i_profiles_euro.json
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: eu-steel.chs_profiles
+    name: "European circular hollow sections JSON"
+    publisher: "Paulo Cachim / eurocodepy"
+    region: eu
+    download_url: "https://raw.githubusercontent.com/pcachim/eurocodepy/master/src/eurocodepy/data/chs_profiles_euro.json"
+    license: "MIT"
+    attribution_required: true
+    format: json
+    local_path: eu-steel/chs_profiles_euro.json
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: eu-steel.rhs_profiles
+    name: "European rectangular hollow sections JSON"
+    publisher: "Paulo Cachim / eurocodepy"
+    region: eu
+    download_url: "https://raw.githubusercontent.com/pcachim/eurocodepy/master/src/eurocodepy/data/rhs_profiles_euro.json"
+    license: "MIT"
+    attribution_required: true
+    format: json
+    local_path: eu-steel/rhs_profiles_euro.json
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: eu-steel.shs_profiles
+    name: "European square hollow sections JSON"
+    publisher: "Paulo Cachim / eurocodepy"
+    region: eu
+    download_url: "https://raw.githubusercontent.com/pcachim/eurocodepy/master/src/eurocodepy/data/shs_profiles_euro.json"
+    license: "MIT"
+    attribution_required: true
+    format: json
+    local_path: eu-steel/shs_profiles_euro.json
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/sections.py
+
+  - id: eu-steel.eurocodes_constants
+    name: "Eurocode constants table (gamma factors, material grades)"
+    publisher: "Paulo Cachim / eurocodepy"
+    region: eu
+    download_url: "https://raw.githubusercontent.com/pcachim/eurocodepy/master/src/eurocodepy/data/eurocodes.json"
+    license: "MIT"
+    attribution_required: true
+    format: json
+    local_path: eu-steel/eurocodes.json
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/materials.py (to be added in P3)
+
+  - id: arcelormittal.sections
+    name: "ArcelorMittal European Sections catalogue"
+    publisher: "ArcelorMittal Commercial Sections"
+    region: eu
+    url: "https://sections.arcelormittal.com/"
+    license: "Manufacturer commercial information, free reference"
+    attribution_required: true
+    attribution_string: "Cross-check reference: ArcelorMittal Sections Catalogue, EN 10365:2017."
+    format: xlsx
+    local_path: arcelormittal/sections_catalogue.xlsx
+    manual: true
+    notes: |
+      Registration may be required. Manual fetch for cross-reference
+      only; eurocodepy JSONs above provide the working data.
+    consumed_by:
+      - manual cross-check only
+
+  # -------------------- Cost catalogues --------------------
+
+  - id: ddc.cwicr
+    name: "DDC CWICR Open Construction Cost Database"
+    publisher: "DataDrivenConstruction.io"
+    region: multi
+    url: "https://github.com/datadrivenconstruction/OpenConstructionEstimate-DDC-CWICR"
+    license: "CC-BY-4.0 (data); Apache-2.0 (code)"
+    attribution_required: true
+    attribution_string: "Cost basis derived from the DDC CWICR Open Construction Cost Database (CC-BY-4.0). https://github.com/datadrivenconstruction/OpenConstructionEstimate-DDC-CWICR"
+    format: git
+    local_path: ddc-cwicr/repo
+    manual: false
+    git_clone: true
+    notes: |
+      Berlin EUR catalogue at DE___DDC_CWICR/DE_BERLIN_workitems_costs_resources_DDC_CWICR.parquet
+      US USD catalogue at US___DDC_CWICR/USA_USD_workitems_costs_resources_DDC_CWICR.parquet
+      Both ~39 MB parquet files.
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/cost.py (to be added in P3)
+
+  - id: destatis.baupreisindex
+    name: "Destatis Baupreisindex (Construction Price Index)"
+    publisher: "Statistisches Bundesamt"
+    region: de
+    url: "https://www-genesis.destatis.de/genesis/online?operation=table&code=61261-0008"
+    dbnomics_url: "https://db.nomics.world/DESTATIS/61261BJ008"
+    download_url: "https://api.db.nomics.world/v22/series/DESTATIS/61261BJ008?format=csv"
+    license: "dl-de/by-2.0 (Datenlizenz Deutschland 2.0)"
+    attribution_required: true
+    attribution_string: "Cost time-adjustment: Destatis Baupreisindex (Wohngebäude), © Statistisches Bundesamt, dl-de/by-2.0."
+    format: csv
+    local_path: destatis/baupreisindex_wohngebaeude.csv
+    manual: false
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/cost.py
+
+  - id: nyc.dob_permits
+    name: "NYC DOB Permit Issuance (sample)"
+    publisher: "City of New York"
+    region: us
+    url: "https://data.cityofnewyork.us/Housing-Development/DOB-Permit-Issuance/ipu4-2q9a"
+    download_url: "https://data.cityofnewyork.us/resource/ipu4-2q9a.csv?$limit=5000"
+    license: "NYC OpenData Public Domain"
+    attribution_required: false
+    format: csv
+    local_path: nyc-opendata/dob_permit_issuance_sample.csv
+    manual: false
+    notes: |
+      5,000-row sample. Full export (~2 GB) on request only.
+    consumed_by:
+      - tests/origin/test_cost_us_sanity.py
+
+  # -------------------- Reference / cross-check --------------------
+
+  - id: eurocodeapplied.tables
+    name: "EurocodeApplied IPE/HEA/HEB/HEM design properties (HTML)"
+    publisher: "eurocodeapplied.com"
+    region: eu
+    download_url: "https://eurocodeapplied.com/design/en1993/ipe-hea-heb-hem-design-properties"
+    license: "Website terms; engineering reference use"
+    attribution_required: true
+    format: html
+    local_path: eurocodeapplied/ipe_hea_heb_design_properties.html
+    manual: false
+    consumed_by:
+      - tests (cross-check vs eurocodepy)
+
+  - id: asce7.hazard_tool
+    name: "ASCE 7-22 Hazard Tool"
+    publisher: "American Society of Civil Engineers"
+    region: us
+    url: "https://asce7hazardtool.online/"
+    license: "ASCE web service (verify ToS for SaaS use)"
+    attribution_required: true
+    format: api
+    local_path: asce7/README.md
+    manual: true
+    notes: |
+      No file to download. The Origin engine queries the JSON API at
+      request time for US site-specific loads. README.md documents the
+      adapter contract.
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/loads.py (P5)
+
+  # -------------------- Python packages --------------------
+
+  - id: pip.structuralcodes
+    name: "structuralcodes (fib International)"
+    publisher: "fib - International Federation for Structural Concrete"
+    region: multi
+    url: "https://pypi.org/project/structuralcodes/"
+    github_url: "https://github.com/fib-international/structuralcodes"
+    license: "MIT"
+    attribution_required: true
+    attribution_string: "Concrete member design per Eurocode 2 via structuralcodes (fib International, MIT)."
+    format: python_package
+    local_path: ""
+    manual: false
+    pin: ">=0.7.0,<1.0"
+    consumed_by:
+      - apps/api/verolas_api/workflow/origin/grid.py (EU concrete path)

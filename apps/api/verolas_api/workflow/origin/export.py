@@ -63,7 +63,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from verolas_api.workflow.origin.cost import CWICR_ATTRIBUTION
 from verolas_api.workflow.origin.geometry import Geometry
+from verolas_api.workflow.origin.sections import (
+    AISC_360_DESIGN_CODE_ATTRIBUTION,
+    AISC_SHAPES_ATTRIBUTION,
+    EC3_DESIGN_CODE_ATTRIBUTION,
+    EUROCODEPY_ATTRIBUTION,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -327,6 +334,26 @@ def render_pdf(
         story.append(_takeoff_table(chosen_option))
         story.append(Spacer(1, 3 * mm))
         story.append(_dcr_table(chosen_option))
+
+        worst = chosen_option.get("worst_case_member")
+        if isinstance(worst, dict):
+            story.append(Spacer(1, 3 * mm))
+            story.append(
+                Paragraph(
+                    f"<b>Worst-case member:</b> "
+                    f"<font face='Courier'>{worst.get('member_id', '')}</font> "
+                    f"({worst.get('section', '')}) governs at DCR "
+                    f"{float(worst.get('dcr', 0)):.2f} ({worst.get('governs', '')}).",
+                    body,
+                )
+            )
+
+        schedule = chosen_option.get("member_schedule") or []
+        if isinstance(schedule, list) and schedule:
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph("Member schedule", h2))
+            story.append(_member_schedule_table(schedule))
+
         story.append(Spacer(1, 3 * mm))
         story.append(Paragraph("Caveats", h2))
         for caveat in chosen_option.get("caveats") or []:
@@ -391,6 +418,20 @@ def render_pdf(
                 )
             )
 
+    story.append(PageBreak())
+    story.append(Paragraph("5. Data sources and attributions", h2))
+    story.append(
+        Paragraph(
+            "Every figure on the preceding pages traces back to one of "
+            "the published sources below. Engineer review supersedes "
+            "any engine output.",
+            body,
+        )
+    )
+    for attribution in _attributions_for(chosen_option):
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(f"- {attribution}", small))
+
     story.append(Spacer(1, 12 * mm))
     story.append(
         Paragraph(
@@ -402,6 +443,37 @@ def render_pdf(
 
     doc.build(story)
     return buf.getvalue()
+
+
+def _attributions_for(chosen_option: dict[str, Any] | None) -> list[str]:
+    """Pick attribution strings whose data the chosen option actually used.
+
+    Cost basis (DDC CWICR) is always present because the BoQ runs for
+    every option. Steel-specific attributions appear only when the
+    chosen option uses a steel system. EC3 vs AISC 360 follows the
+    jurisdiction; today the engine is EU-only so AISC 360 is included
+    only when US sections show up in the schedule.
+    """
+    attributions: list[str] = [CWICR_ATTRIBUTION]
+
+    primary_structure = ""
+    schedule_sections = ""
+    if chosen_option:
+        primary_structure = str(chosen_option.get("primary_structure") or "").lower()
+        schedule = chosen_option.get("member_schedule") or []
+        if isinstance(schedule, list):
+            schedule_sections = " ".join(
+                str(row.get("section") or "") for row in schedule if isinstance(row, dict)
+            )
+
+    if "steel" in primary_structure or "(s355)" in schedule_sections.lower():
+        attributions.append(EUROCODEPY_ATTRIBUTION)
+        attributions.append(EC3_DESIGN_CODE_ATTRIBUTION)
+    if "(a992)" in schedule_sections.lower():
+        attributions.append(AISC_SHAPES_ATTRIBUTION)
+        attributions.append(AISC_360_DESIGN_CODE_ATTRIBUTION)
+
+    return attributions
 
 
 def _option_summary_paragraph(option: dict[str, Any]) -> str:
@@ -440,6 +512,46 @@ def _takeoff_table(option: dict[str, Any]) -> Table:
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ]
+        )
+    )
+    return table
+
+
+def _member_schedule_table(schedule: list[dict[str, Any]]) -> Table:
+    """Render the member schedule as a multi-row table.
+
+    Real BoQ has hundreds of rows; this shows the first 30 and a
+    'further rows' footer so the PDF stays scannable. The full
+    schedule is in the run's outputs for downstream consumers.
+    """
+    rows: list[list[Any]] = [["Section", "Role", "Count", "Length m", "Weight kg", "Cost EUR"]]
+    visible = schedule[:30]
+    for row in visible:
+        rows.append(
+            [
+                str(row.get("section", "")),
+                str(row.get("role", "")),
+                f"{int(row.get('count', 0))}",
+                f"{float(row.get('total_length_m', 0)):.1f}",
+                f"{int(row.get('total_weight_kg', 0)):,}",
+                f"{int(row.get('total_cost_eur', 0)):,}",
+            ]
+        )
+    if len(schedule) > 30:
+        rows.append([f"+ {len(schedule) - 30} more rows in JSON outputs", "", "", "", "", ""])
+    table = Table(
+        rows,
+        colWidths=[55 * mm, 18 * mm, 18 * mm, 25 * mm, 25 * mm, 25 * mm],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
             ]
         )
     )

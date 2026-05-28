@@ -2058,6 +2058,62 @@ function OriginOptionCard({ option }: { option: OriginStructuralOption }) {
         </p>
       </div>
 
+      {option.worst_case_member && (
+        <div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Worst-case member
+          </div>
+          <p
+            className={`rounded px-2 py-1 text-[10px] ${
+              option.worst_case_member.dcr > 1.0
+                ? "bg-destructive/10 text-destructive"
+                : option.worst_case_member.dcr > 0.85
+                  ? "bg-amber-50/60 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                  : "bg-emerald-50/40 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+            }`}
+          >
+            <span className="font-mono">{option.worst_case_member.member_id}</span>{" "}
+            ({option.worst_case_member.section}) governs at DCR{" "}
+            {option.worst_case_member.dcr.toFixed(2)} ({option.worst_case_member.governs}).
+          </p>
+        </div>
+      )}
+
+      {option.member_schedule.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Member schedule
+          </div>
+          <table className="w-full border-collapse text-[10px]">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th className="py-0.5 pr-1">Section</th>
+                <th className="px-1 text-right">#</th>
+                <th className="px-1 text-right">Length m</th>
+                <th className="pl-1 text-right">€</th>
+              </tr>
+            </thead>
+            <tbody>
+              {option.member_schedule.slice(0, 8).map((row) => (
+                <tr key={`${row.section}_${row.role}`}>
+                  <td className="py-0.5 pr-1 font-mono text-[9px]">{row.section}</td>
+                  <td className="px-1 text-right">{row.count}</td>
+                  <td className="px-1 text-right">{Math.round(row.total_length_m)}</td>
+                  <td className="pl-1 text-right">
+                    {Math.round(row.total_cost_eur).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {option.member_schedule.length > 8 && (
+            <p className="mt-0.5 text-[9px] text-muted-foreground">
+              + {option.member_schedule.length - 8} more rows in the export PDF
+            </p>
+          )}
+        </div>
+      )}
+
       {option.caveats.length > 0 && (
         <div>
           <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">

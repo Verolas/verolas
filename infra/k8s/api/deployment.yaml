@@ -51,6 +51,15 @@ spec:
                   name: verolas-api-db
                   key: database_url
                   optional: true
+            # Anthropic key for the Origin AI Design adapter. The
+            # secret is created out-of-band (kubectl create secret) and
+            # rotated via the Anthropic console; never committed here.
+            - name: VEROLAS_API_ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: verolas-anthropic
+                  key: api_key
+                  optional: true
           resources:
             requests:
               cpu: 100m
