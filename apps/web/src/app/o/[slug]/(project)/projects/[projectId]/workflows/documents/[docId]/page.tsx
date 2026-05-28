@@ -55,6 +55,7 @@ import {
   type WorkflowNodeStatus,
   type WorkflowRun,
   type WorkflowRunNode,
+  projectFilesApi,
   workflowDocumentsApi,
   workflowsApi,
 } from "@/lib/api";
@@ -580,7 +581,7 @@ function DocumentEditor({ params }: Props) {
   }, [resolved, activeRun]);
 
   const advanceManual = useCallback(
-    async (nodeKey: string) => {
+    async (nodeKey: string, outputs?: Record<string, unknown>) => {
       if (!resolved || !activeRun) return;
       setBusy(true);
       setError(null);
@@ -590,6 +591,7 @@ function DocumentEditor({ params }: Props) {
           resolved.projectId,
           activeRun.id,
           nodeKey,
+          outputs ? { outputs } : {},
         );
         setActiveRun(r);
         setSelectedNodeKey(null);
@@ -1090,7 +1092,7 @@ function DocumentEditor({ params }: Props) {
           }}
           onRename={(value) => renameNode(selectedFlowNode.id, value)}
           onDelete={() => deleteNode(selectedFlowNode.id)}
-          onManualDone={() => void advanceManual(selectedFlowNode.id)}
+          onManualDone={(outputs) => void advanceManual(selectedFlowNode.id, outputs)}
           onApprove={() => void submitGate(selectedFlowNode.id, "approved")}
           onReject={() => void submitGate(selectedFlowNode.id, "rejected")}
           onOpenReviewEditor={(mode) => {
@@ -1280,7 +1282,7 @@ function NodeDetailModal({
   onClose: () => void;
   onRename: (value: string) => void;
   onDelete: () => void;
-  onManualDone: () => void;
+  onManualDone: (outputs?: Record<string, unknown>) => void;
   onOpenReviewEditor?: ((mode: "review" | "roof" | "detail") => void) | undefined;
   onApprove: () => void;
   onReject: () => void;
@@ -1300,7 +1302,14 @@ function NodeDetailModal({
         : status === "running"
           ? Loader2
           : CircleDashed;
-  const showManualAction = flowNode.data.kind === "manual" && status === "ready";
+  // Nodes whose workbench submits its own outputs (and marks itself
+  // done). For these we hide the generic empty "Mark done" button so a
+  // stray click can't advance the node with no outputs and break the
+  // downstream automated steps.
+  const showManualAction =
+    flowNode.data.kind === "manual" &&
+    status === "ready" &&
+    !SELF_COMPLETING_NODES.has(flowNode.id);
   const showGateAction =
     (flowNode.data.kind === "gate.review" || flowNode.data.kind === "gate.approve") &&
     status === "ready";
@@ -1371,8 +1380,11 @@ function NodeDetailModal({
           <NodeWorkbench
             flowNode={flowNode}
             activeRun={activeRun}
+            runNode={runNode}
             orgSlug={orgSlug}
             projectId={projectId}
+            busy={busy}
+            onManualDone={onManualDone}
             onOpenReviewEditor={onOpenReviewEditor}
           />
 
@@ -1380,7 +1392,7 @@ function NodeDetailModal({
             <div>
               <button
                 type="button"
-                onClick={onManualDone}
+                onClick={() => onManualDone()}
                 disabled={busy}
                 className="inline-flex items-center gap-1 rounded border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-surface-hover disabled:opacity-50"
               >
@@ -1450,19 +1462,395 @@ function NodeDetailModal({
 // Origin architectural_review node has a workbench (floor-preview
 // gallery rendered from the upstream floor_parse outputs). Other
 // nodes fall back to a brief placeholder.
+// Nodes that render their own data-entry workbench and submit their
+// own outputs (so the generic empty "Mark done" is suppressed).
+const SELF_COMPLETING_NODES = new Set([
+  "submit_brief",
+  "upload_cad",
+  "parameters",
+  "export_seal",
+]);
+
+const ASSET_TYPES = [
+  "residential",
+  "mixed_use",
+  "commercial",
+  "industrial",
+  "education",
+] as const;
+
+const STRUCTURAL_SYSTEMS = [
+  "light_frame_wood",
+  "steel_mrf",
+  "rc_flat_slab",
+  "clt_hybrid",
+] as const;
+
+const CALC_PREFERENCES = ["optimized", "balanced", "conservative"] as const;
+
+function readOutput<T>(runNode: WorkflowRunNode | null, key: string, fallback: T): T {
+  const value = (runNode?.outputs as Record<string, unknown> | undefined)?.[key];
+  return value === undefined || value === null ? fallback : (value as T);
+}
+
+function OriginBriefPanel({
+  runNode,
+  busy,
+  onSubmit,
+}: {
+  runNode: WorkflowRunNode | null;
+  busy: boolean;
+  onSubmit: (outputs: Record<string, unknown>) => void;
+}) {
+  const [projectName, setProjectName] = useState(() =>
+    readOutput(runNode, "project_name", ""),
+  );
+  const [address, setAddress] = useState(() => readOutput(runNode, "address", ""));
+  const [assetType, setAssetType] = useState(() =>
+    readOutput(runNode, "asset_type", "residential"),
+  );
+  const [system, setSystem] = useState(() =>
+    readOutput(runNode, "structural_system", "steel_mrf"),
+  );
+  const [jurisdiction, setJurisdiction] = useState(() =>
+    readOutput(runNode, "jurisdiction", "DE"),
+  );
+  const canSubmit = projectName.trim() !== "" && address.trim() !== "";
+
+  return (
+    <div className="space-y-3 text-[11px]">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-muted-foreground">
+        Name the project, set the address, and pick the asset type + structural system. The
+        brief seeds every downstream step.
+      </div>
+      <label className="block">
+        Project name
+        <input
+          type="text"
+          value={projectName}
+          onChange={(e) => setProjectName(e.target.value)}
+          className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+        />
+      </label>
+      <label className="block">
+        Address
+        <input
+          type="text"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          Asset type
+          <select
+            value={assetType}
+            onChange={(e) => setAssetType(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          >
+            {ASSET_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          Structural system
+          <select
+            value={system}
+            onChange={(e) => setSystem(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          >
+            {STRUCTURAL_SYSTEMS.map((t) => (
+              <option key={t} value={t}>
+                {t.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          Jurisdiction
+          <select
+            value={jurisdiction}
+            onChange={(e) => setJurisdiction(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          >
+            {["DE", "AT", "CH", "US", "FR", "UK"].map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={busy || !canSubmit}
+        onClick={() =>
+          onSubmit({
+            project_name: projectName,
+            address,
+            asset_type: assetType,
+            structural_system: system,
+            jurisdiction,
+          })
+        }
+        className="inline-flex items-center gap-1 rounded border border-border bg-background px-3 py-1.5 font-medium hover:bg-surface-hover disabled:opacity-50"
+      >
+        <Check className="size-3" aria-hidden="true" />
+        Save brief & mark done
+      </button>
+    </div>
+  );
+}
+
+function OriginCadUploadPanel({
+  runNode,
+  orgSlug,
+  projectId,
+  busy,
+  onSubmit,
+}: {
+  runNode: WorkflowRunNode | null;
+  orgSlug: string | null;
+  projectId: string | null;
+  busy: boolean;
+  onSubmit: (outputs: Record<string, unknown>) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploaded, setUploaded] = useState<{ key: string; format: string; name: string } | null>(
+    () => {
+      const key = readOutput<string>(runNode, "cad_file_key", "");
+      const fmt = readOutput<string>(runNode, "cad_format", "");
+      return key ? { key, format: fmt, name: key.split("/").pop() ?? key } : null;
+    },
+  );
+
+  const handleFile = useCallback(
+    async (file: File): Promise<void> => {
+      if (!orgSlug || !projectId) return;
+      const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+      if (ext !== "dxf" && ext !== "ifc") {
+        setError("Only DXF or IFC files are supported.");
+        return;
+      }
+      setUploading(true);
+      setError(null);
+      try {
+        const res = await projectFilesApi.initiateUpload(orgSlug, projectId, {
+          filename: file.name,
+          content_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+        });
+        const presigned = res.single_part_upload;
+        if (!presigned) {
+          throw new Error("Server did not return a single-part upload URL.");
+        }
+        const put = await fetch(presigned.url, {
+          method: presigned.method,
+          headers: presigned.headers,
+          body: file,
+        });
+        if (!put.ok) {
+          throw new Error(`Upload failed (HTTP ${put.status}).`);
+        }
+        setUploaded({ key: res.object_key, format: ext, name: file.name });
+      } catch (err) {
+        setError(err instanceof ApiError ? err.detail : String(err));
+      } finally {
+        setUploading(false);
+      }
+    },
+    [orgSlug, projectId],
+  );
+
+  return (
+    <div className="space-y-3 text-[11px]">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-muted-foreground">
+        Upload the architect drawing as DXF or IFC. Native DWG is not supported; export to DXF
+        from AutoCAD first.
+      </div>
+      <input
+        type="file"
+        accept=".dxf,.ifc"
+        disabled={uploading || busy}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+        }}
+        className="block w-full text-[11px] file:mr-2 file:rounded file:border file:border-border file:bg-background file:px-2 file:py-1 file:text-[11px]"
+      />
+      {uploading && (
+        <p className="flex items-center gap-1 text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Uploading...
+        </p>
+      )}
+      {error && (
+        <p className="rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-destructive">
+          {error}
+        </p>
+      )}
+      {uploaded && (
+        <p className="rounded border border-emerald-300/40 bg-emerald-50 px-2 py-1 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Uploaded {uploaded.name} ({uploaded.format.toUpperCase()})
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={busy || uploading || !uploaded}
+        onClick={() =>
+          uploaded &&
+          onSubmit({ cad_file_key: uploaded.key, cad_format: uploaded.format })
+        }
+        className="inline-flex items-center gap-1 rounded border border-border bg-background px-3 py-1.5 font-medium hover:bg-surface-hover disabled:opacity-50"
+      >
+        <Check className="size-3" aria-hidden="true" />
+        Confirm CAD & mark done
+      </button>
+    </div>
+  );
+}
+
+function OriginParametersPanel({
+  runNode,
+  busy,
+  onSubmit,
+}: {
+  runNode: WorkflowRunNode | null;
+  busy: boolean;
+  onSubmit: (outputs: Record<string, unknown>) => void;
+}) {
+  const [dead, setDead] = useState(() => String(readOutput(runNode, "dead_load_kN_m2", 4.5)));
+  const [live, setLive] = useState(() => String(readOutput(runNode, "live_load_kN_m2", 2.0)));
+  const [snow, setSnow] = useState(() => String(readOutput(runNode, "snow_load_kN_m2", 0.85)));
+  const [pref, setPref] = useState(() => readOutput(runNode, "calc_preference", "balanced"));
+  const [code, setCode] = useState(() =>
+    readOutput(runNode, "code_classification", "Eurocode"),
+  );
+
+  return (
+    <div className="space-y-3 text-[11px]">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-muted-foreground">
+        Set the gravity loads (per floor) and calculation preference. These feed the grid
+        engine that sizes the three options.
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <label className="block">
+          Dead (kN/m²)
+          <input
+            type="number"
+            step="0.1"
+            value={dead}
+            onChange={(e) => setDead(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="block">
+          Live (kN/m²)
+          <input
+            type="number"
+            step="0.1"
+            value={live}
+            onChange={(e) => setLive(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="block">
+          Snow (kN/m²)
+          <input
+            type="number"
+            step="0.1"
+            value={snow}
+            onChange={(e) => setSnow(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          Calculation preference
+          <select
+            value={pref}
+            onChange={(e) => setPref(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          >
+            {CALC_PREFERENCES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          Code
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1"
+          />
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          onSubmit({
+            dead_load_kN_m2: Number(dead),
+            live_load_kN_m2: Number(live),
+            snow_load_kN_m2: Number(snow),
+            calc_preference: pref,
+            code_classification: code,
+          })
+        }
+        className="inline-flex items-center gap-1 rounded border border-border bg-background px-3 py-1.5 font-medium hover:bg-surface-hover disabled:opacity-50"
+      >
+        <Check className="size-3" aria-hidden="true" />
+        Save parameters & mark done
+      </button>
+    </div>
+  );
+}
+
 function NodeWorkbench({
   flowNode,
   activeRun,
+  runNode,
   orgSlug,
   projectId,
+  busy,
+  onManualDone,
   onOpenReviewEditor,
 }: {
   flowNode: FlowNode;
   activeRun: WorkflowRun | null;
+  runNode: WorkflowRunNode | null;
   orgSlug: string | null;
   projectId: string | null;
+  busy: boolean;
+  onManualDone: (outputs?: Record<string, unknown>) => void;
   onOpenReviewEditor?: ((mode: "review" | "roof" | "detail") => void) | undefined;
 }) {
+  if (flowNode.id === "submit_brief") {
+    return <OriginBriefPanel runNode={runNode} busy={busy} onSubmit={onManualDone} />;
+  }
+  if (flowNode.id === "upload_cad") {
+    return (
+      <OriginCadUploadPanel
+        runNode={runNode}
+        orgSlug={orgSlug}
+        projectId={projectId}
+        busy={busy}
+        onSubmit={onManualDone}
+      />
+    );
+  }
+  if (flowNode.id === "parameters") {
+    return <OriginParametersPanel runNode={runNode} busy={busy} onSubmit={onManualDone} />;
+  }
   if (flowNode.id === "architectural_review") {
     return (
       <OriginFloorGallery
