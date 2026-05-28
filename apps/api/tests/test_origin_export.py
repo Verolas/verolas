@@ -172,6 +172,35 @@ def test_render_dxf_handles_missing_detail_layout() -> None:
     assert "LWPOLYLINE" in text
 
 
+def test_render_dxf_survives_layout_name_collisions() -> None:
+    """Floors named 'Layout1' or sharing a name must not crash render_dxf.
+
+    ezdxf seeds a default 'Layout1' paperspace, and tab names must be
+    unique. A parsed floor literally named 'Layout1' (e.g. an architect
+    DXF whose plan tab kept the default name) - or two floors that
+    sanitise to the same string - previously raised DXFValueError.
+    """
+    ext = Extents(min_x=0.0, min_y=0.0, max_x=10.0, max_y=8.0)
+    geometry = Geometry(
+        source_format="dxf",
+        floors=[
+            Floor(key="floor_0", name="Layout1", elevation_m=0.0, extents=ext),
+            Floor(key="floor_1", name="Ground Floor", elevation_m=3.0, extents=ext),
+            Floor(key="floor_2", name="Ground Floor", elevation_m=6.0, extents=ext),
+            Floor(key="floor_3", name="Model", elevation_m=9.0, extents=ext),
+        ],
+    )
+    dxf_bytes = render_dxf(geometry, None)
+    doc = ezdxf.read(io.StringIO(dxf_bytes.decode("utf-8")))  # type: ignore[attr-defined]
+    names = doc.layouts.names()
+    # One paperspace layout per floor, all distinct, none left as the
+    # default Layout1.
+    paperspace = [n for n in names if n != "Model"]
+    assert len(paperspace) == 4
+    assert len(set(paperspace)) == 4
+    assert "Layout1" not in paperspace
+
+
 def test_render_pdf_starts_with_pdf_magic_and_has_seal_name() -> None:
     pdf_bytes = render_pdf(
         project_id="11111111-1111-1111-1111-111111111111",

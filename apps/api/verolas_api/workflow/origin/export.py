@@ -127,9 +127,16 @@ def render_dxf(geometry: Geometry, detail_layout: dict[str, Any] | None) -> byte
     # Make sure the file has at least one layout (besides Model). The
     # default "Layout1" from `setup=True` is dropped only after we add
     # the per-floor ones to avoid the ezdxf "last paperspace" guard.
+    #
+    # Layout tab names must be unique. Seed the used-set with the names
+    # already present (Model + the default Layout1) so a floor that
+    # sanitises to "Layout1" - or two floors that sanitise identically -
+    # gets a suffixed, collision-free name instead of crashing.
+    used_layout_names = {n.lower() for n in doc.layouts.names()}
     added_any = False
     for index, floor in enumerate(geometry.floors, start=1):
-        layout = doc.layouts.new(_safe_layout_name(floor.name, index))
+        layout_name = _unique_layout_name(_safe_layout_name(floor.name, index), used_layout_names)
+        layout = doc.layouts.new(layout_name)
         for wall in floor.walls:
             layout.add_lwpolyline(
                 [(wall.start.x, wall.start.y), (wall.end.x, wall.end.y)],
@@ -226,6 +233,24 @@ def _safe_layout_name(name: str, index: int) -> str:
     if not cleaned:
         cleaned = f"Floor {index}"
     return cleaned[:31]  # DXF tab name max length
+
+
+def _unique_layout_name(base: str, used_lower: set[str]) -> str:
+    """Return a layout name unique (case-insensitively) against `used_lower`.
+
+    DXF tab names must be unique and at most 31 chars. When `base`
+    collides - a floor literally named "Layout1"/"Model", or two floors
+    that sanitise to the same string - append a numeric suffix that
+    still fits the length cap. Records the chosen name in `used_lower`.
+    """
+    candidate = base
+    suffix = 2
+    while candidate.lower() in used_lower:
+        tag = f" ({suffix})"
+        candidate = base[: 31 - len(tag)].rstrip() + tag
+        suffix += 1
+    used_lower.add(candidate.lower())
+    return candidate
 
 
 def render_pdf(
